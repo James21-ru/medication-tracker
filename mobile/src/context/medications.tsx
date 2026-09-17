@@ -12,9 +12,9 @@ export type DoseStatus = 'pending' | 'taken' | 'skipped';
 export type Package = { id: string; remainingQuantity: number; unit: StockUnit; expiresOn: string | null };
 export type Reminder = { time: string; doseQuantity: number };
 export type Schedule = { id: string; kind: Exclude<ScheduleKind, 'as-needed'>; time: string; weekdays: number[]; doseQuantity: number; doseUnit: StockUnit; startOn: string; endOn: string | null; intervalDays: number; cycleOnDays: number; cycleOffDays: number };
-export type Medication = { id: string; name: string; form: MedicationForm; amount: string; unit: StrengthUnit; color: string; packages: Package[]; schedules: Schedule[] };
+export type Medication = { id: string; name: string; form: MedicationForm; amount: string; unit: StrengthUnit; color: string; barcode: string | null; packages: Package[]; schedules: Schedule[] };
 export type TodayDose = { id: string; medicationId: string; medicationName: string; color: string; form: MedicationForm; amount: string; unit: StrengthUnit; time: string; quantity: number; stockUnit: StockUnit; status: DoseStatus; isManual: boolean };
-export type NewMedication = { name: string; form: MedicationForm; amount: string; unit: StrengthUnit; color: string; scheduleKind: ScheduleKind; weekdays: number[]; reminders: Reminder[]; intervalDays: number; cycleOnDays: number; cycleOffDays: number; startOn: string; endOn: string | null; stockUnit: StockUnit; stockQuantity: number; expiresOn: string | null };
+export type NewMedication = { name: string; form: MedicationForm; amount: string; unit: StrengthUnit; color: string; barcode: string | null; scheduleKind: ScheduleKind; weekdays: number[]; reminders: Reminder[]; intervalDays: number; cycleOnDays: number; cycleOffDays: number; startOn: string; endOn: string | null; stockUnit: StockUnit; stockQuantity: number; expiresOn: string | null };
 
 export const stockUnitFor = (form: MedicationForm): StockUnit => ['Жидкость', 'Капли', 'Сироп'].includes(form) ? 'мл' : 'шт.';
 
@@ -40,7 +40,7 @@ const weekdaysFor = (kind: ScheduleKind, selected: number[]) => kind === 'daily'
 async function migrate(db: SQLite.SQLiteDatabase) {
   await db.execAsync(`
     PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;
-    CREATE TABLE IF NOT EXISTS medications (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, form TEXT NOT NULL, amount TEXT NOT NULL, unit TEXT NOT NULL, color TEXT NOT NULL, created_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS medications (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, form TEXT NOT NULL, amount TEXT NOT NULL, unit TEXT NOT NULL, color TEXT NOT NULL, barcode TEXT, created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS packages (id TEXT PRIMARY KEY NOT NULL, medication_id TEXT NOT NULL, quantity_initial REAL NOT NULL, quantity_remaining REAL NOT NULL, unit TEXT NOT NULL, expires_on TEXT, created_at TEXT NOT NULL, FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE);
     CREATE TABLE IF NOT EXISTS schedules (id TEXT PRIMARY KEY NOT NULL, medication_id TEXT NOT NULL, kind TEXT NOT NULL, weekdays_json TEXT NOT NULL, time TEXT NOT NULL, dose_quantity REAL NOT NULL, dose_unit TEXT NOT NULL, start_on TEXT NOT NULL, end_on TEXT, active INTEGER NOT NULL DEFAULT 1, FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE);
     CREATE TABLE IF NOT EXISTS dose_events (id TEXT PRIMARY KEY NOT NULL, schedule_id TEXT, medication_id TEXT NOT NULL, scheduled_on TEXT NOT NULL, scheduled_time TEXT NOT NULL, quantity REAL NOT NULL, unit TEXT NOT NULL, status TEXT NOT NULL, source TEXT NOT NULL, completed_at TEXT, UNIQUE(schedule_id, scheduled_on, scheduled_time), FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE);
@@ -51,6 +51,8 @@ async function migrate(db: SQLite.SQLiteDatabase) {
   if (!known.has('interval_days')) await db.execAsync('ALTER TABLE schedules ADD COLUMN interval_days INTEGER NOT NULL DEFAULT 1');
   if (!known.has('cycle_on_days')) await db.execAsync('ALTER TABLE schedules ADD COLUMN cycle_on_days INTEGER NOT NULL DEFAULT 1');
   if (!known.has('cycle_off_days')) await db.execAsync('ALTER TABLE schedules ADD COLUMN cycle_off_days INTEGER NOT NULL DEFAULT 0');
+  const medicationColumns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(medications)');
+  if (!medicationColumns.some((column) => column.name === 'barcode')) await db.execAsync('ALTER TABLE medications ADD COLUMN barcode TEXT');
 }
 
 async function createEventsThroughToday(db: SQLite.SQLiteDatabase) {
@@ -78,7 +80,7 @@ export function MedicationProvider({ children }: { children: React.ReactNode }) 
 
   const refresh = useCallback(async () => {
     const db = await dbPromise; await migrate(db); await createEventsThroughToday(db);
-    const medicationRows = await db.getAllAsync<{ id: string; name: string; form: MedicationForm; amount: string; unit: StrengthUnit; color: string }>('SELECT id, name, form, amount, unit, color FROM medications ORDER BY created_at DESC');
+    const medicationRows = await db.getAllAsync<{ id: string; name: string; form: MedicationForm; amount: string; unit: StrengthUnit; color: string; barcode: string | null }>('SELECT id, name, form, amount, unit, color, barcode FROM medications ORDER BY created_at DESC');
     const packageRows = await db.getAllAsync<{ id: string; medication_id: string; quantity_remaining: number; unit: StockUnit; expires_on: string | null }>('SELECT id, medication_id, quantity_remaining, unit, expires_on FROM packages ORDER BY expires_on IS NULL, expires_on ASC');
     const scheduleRows = await db.getAllAsync<{ id: string; medication_id: string; kind: Schedule['kind']; weekdays_json: string; time: string; dose_quantity: number; dose_unit: StockUnit; start_on: string; end_on: string | null; interval_days: number; cycle_on_days: number; cycle_off_days: number }>('SELECT id, medication_id, kind, weekdays_json, time, dose_quantity, dose_unit, start_on, end_on, interval_days, cycle_on_days, cycle_off_days FROM schedules WHERE active = 1');
     setMedications(medicationRows.map((item) => ({ ...item, packages: packageRows.filter((pack) => pack.medication_id === item.id).map((pack) => ({ id: pack.id, remainingQuantity: pack.quantity_remaining, unit: pack.unit, expiresOn: pack.expires_on })), schedules: scheduleRows.filter((schedule) => schedule.medication_id === item.id).map((schedule) => ({ id: schedule.id, kind: schedule.kind, weekdays: JSON.parse(schedule.weekdays_json), time: schedule.time, doseQuantity: schedule.dose_quantity, doseUnit: schedule.dose_unit, startOn: schedule.start_on, endOn: schedule.end_on, intervalDays: schedule.interval_days, cycleOnDays: schedule.cycle_on_days, cycleOffDays: schedule.cycle_off_days })) })));
@@ -94,7 +96,7 @@ export function MedicationProvider({ children }: { children: React.ReactNode }) 
   const addMedication = useCallback(async (input: NewMedication, duplicateMode?: 'combine' | 'separate') => {
     const duplicate = medications.find((medication) => sameMedication(input, medication)); if (duplicate && !duplicateMode) return 'duplicate' as const;
     const db = await dbPromise; const medicationId = duplicate && duplicateMode === 'combine' ? duplicate.id : id('med');
-    if (!duplicate || duplicateMode === 'separate') await db.runAsync('INSERT INTO medications (id, name, form, amount, unit, color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', medicationId, input.name.trim(), input.form, input.amount.trim(), input.unit, input.color, isoNow());
+    if (!duplicate || duplicateMode === 'separate') await db.runAsync('INSERT INTO medications (id, name, form, amount, unit, color, barcode, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', medicationId, input.name.trim(), input.form, input.amount.trim(), input.unit, input.color, input.barcode, isoNow());
     await db.runAsync('INSERT INTO packages (id, medication_id, quantity_initial, quantity_remaining, unit, expires_on, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', id('pack'), medicationId, input.stockQuantity, input.stockQuantity, input.stockUnit, input.expiresOn, isoNow());
     if ((!duplicate || duplicateMode === 'separate') && input.scheduleKind !== 'as-needed') {
       for (const reminder of input.reminders) await db.runAsync('INSERT INTO schedules (id, medication_id, kind, weekdays_json, time, dose_quantity, dose_unit, start_on, end_on, interval_days, cycle_on_days, cycle_off_days, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)', id('schedule'), medicationId, input.scheduleKind, JSON.stringify(weekdaysFor(input.scheduleKind, input.weekdays)), reminder.time, reminder.doseQuantity, input.stockUnit, input.startOn, input.endOn, input.intervalDays, input.cycleOnDays, input.cycleOffDays);
