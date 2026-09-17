@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableWithoutFeedback, View } from 'react-native';
+import { Alert, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableWithoutFeedback, View } from 'react-native';
 
 import { MedicationForm, NewMedication, Reminder, ScheduleKind, StockUnit, StrengthUnit, useMedications } from '@/context/medications';
 
@@ -12,7 +12,7 @@ const weekdays = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const today = () => { const value = new Date(); return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`; };
 
 export function AddMedicationFlow({ visible, onClose }: Props) {
-  const { addMedication, medications } = useMedications();
+  const { addMedication, enableReminders, medications } = useMedications();
   const [path, setPath] = useState<Path | null>(null); const [step, setStep] = useState(0); const [showDuplicate, setShowDuplicate] = useState(false); const [duplicateMode, setDuplicateMode] = useState<'combine' | 'separate' | undefined>();
   const [name, setName] = useState(''); const [form, setForm] = useState<MedicationForm>('Таблетка'); const [amount, setAmount] = useState(''); const [unit, setUnit] = useState<StrengthUnit>('мг'); const [color, setColor] = useState(colors[0]); const [showAppearance, setShowAppearance] = useState(false);
   const [scheduleKind, setScheduleKind] = useState<ScheduleKind>('daily'); const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5]); const [reminders, setReminders] = useState<Array<{ time: string; quantity: string }>>([{ time: '08:00', quantity: '1' }]); const [intervalDays, setIntervalDays] = useState('2'); const [cycleOnDays, setCycleOnDays] = useState('5'); const [cycleOffDays, setCycleOffDays] = useState('2'); const [startOn, setStartOn] = useState(today()); const [endOn, setEndOn] = useState('');
@@ -26,7 +26,7 @@ export function AddMedicationFlow({ visible, onClose }: Props) {
 
   function close() { setPath(null); setStep(0); setShowDuplicate(false); setDuplicateMode(undefined); setName(''); setForm('Таблетка'); setAmount(''); setUnit('мг'); setColor(colors[0]); setShowAppearance(false); setScheduleKind('daily'); setSelectedDays([1, 2, 3, 4, 5]); setReminders([{ time: '08:00', quantity: '1' }]); setStockQuantity(''); setExpiresOn(''); setStartOn(today()); setEndOn(''); onClose(); }
   function continueAfterIdentity() { if (duplicate && !duplicateMode) { setShowDuplicate(true); return; } setStep(1); }
-  async function save() { const result = await addMedication(input, duplicateMode); if (result === 'duplicate') setShowDuplicate(true); else close(); }
+  async function save() { const hasSchedule = path === 'schedule' && scheduleKind !== 'as-needed'; const result = await addMedication(input, duplicateMode); if (result === 'duplicate') { setShowDuplicate(true); return; } close(); if (hasSchedule) Alert.alert('Включить напоминания?', 'В нужное время приложение напомнит о приёме. Вы сможете изменить разрешение в настройках устройства.', [{ text: 'Не сейчас', style: 'cancel' }, { text: 'Включить', onPress: () => void enableReminders().then((enabled) => { if (!enabled) Alert.alert('Напоминания выключены', 'Лекарство сохранено. Чтобы получать напоминания, включите уведомления для приложения в настройках устройства.'); }) }]); }
   function next() { if (step === 0) return continueAfterIdentity(); if (step === flow.length - 1) return void save(); setStep((current) => current + 1); }
   function selectDuplicate(mode: 'combine' | 'separate') { setDuplicateMode(mode); setShowDuplicate(false); setStep(1); }
   function setReminder(index: number, field: 'time' | 'quantity', value: string) { setReminders((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item)); }

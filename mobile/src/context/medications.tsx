@@ -1,6 +1,8 @@
 import * as SQLite from 'expo-sqlite';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
+import { enableReminders, syncScheduledReminders } from '@/services/reminders';
+
 export type MedicationForm = 'Капсула' | 'Таблетка' | 'Жидкость';
 export type StrengthUnit = 'мг' | 'мкг' | 'г' | 'мл';
 export type StockUnit = 'шт.' | 'мл';
@@ -19,6 +21,7 @@ type MedicationContextValue = {
   addMedication: (medication: NewMedication, duplicateMode?: 'combine' | 'separate') => Promise<'created' | 'duplicate'>;
   addPackage: (medicationId: string, quantity: number, unit: StockUnit, expiresOn: string | null) => Promise<void>;
   takeDose: (doseId: string) => Promise<void>; skipDose: (doseId: string) => Promise<void>; takeAsNeeded: (medicationId: string) => Promise<void>;
+  enableReminders: () => Promise<boolean>;
   remainingStock: (medication: Medication) => number;
 };
 
@@ -39,6 +42,7 @@ async function migrate(db: SQLite.SQLiteDatabase) {
     CREATE TABLE IF NOT EXISTS packages (id TEXT PRIMARY KEY NOT NULL, medication_id TEXT NOT NULL, quantity_initial REAL NOT NULL, quantity_remaining REAL NOT NULL, unit TEXT NOT NULL, expires_on TEXT, created_at TEXT NOT NULL, FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE);
     CREATE TABLE IF NOT EXISTS schedules (id TEXT PRIMARY KEY NOT NULL, medication_id TEXT NOT NULL, kind TEXT NOT NULL, weekdays_json TEXT NOT NULL, time TEXT NOT NULL, dose_quantity REAL NOT NULL, dose_unit TEXT NOT NULL, start_on TEXT NOT NULL, end_on TEXT, active INTEGER NOT NULL DEFAULT 1, FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE);
     CREATE TABLE IF NOT EXISTS dose_events (id TEXT PRIMARY KEY NOT NULL, schedule_id TEXT, medication_id TEXT NOT NULL, scheduled_on TEXT NOT NULL, scheduled_time TEXT NOT NULL, quantity REAL NOT NULL, unit TEXT NOT NULL, status TEXT NOT NULL, source TEXT NOT NULL, completed_at TEXT, UNIQUE(schedule_id, scheduled_on, scheduled_time), FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE);
+    CREATE TABLE IF NOT EXISTS reminder_notifications (schedule_id TEXT NOT NULL, notification_id TEXT NOT NULL UNIQUE, FOREIGN KEY (schedule_id) REFERENCES schedules(id) ON DELETE CASCADE);
   `);
   const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(schedules)');
   const known = new Set(columns.map((column) => column.name));
@@ -80,7 +84,7 @@ export function MedicationProvider({ children }: { children: React.ReactNode }) 
     setTodayDoses(doseRows.map((dose) => ({ id: dose.id, medicationId: dose.medication_id, medicationName: dose.name, color: dose.color, form: dose.form, amount: dose.amount, unit: dose.strength_unit, time: dose.scheduled_time, quantity: dose.quantity, stockUnit: dose.unit, status: dose.status, isManual: dose.source === 'manual' })));
     setReady(true);
   }, []);
-  useEffect(() => { refresh().catch(console.error); }, [refresh]);
+  useEffect(() => { refresh().then(() => syncScheduledReminders()).catch(console.error); }, [refresh]);
 
   const addPackage = useCallback(async (medicationId: string, quantity: number, unit: StockUnit, expiresOn: string | null) => {
     const db = await dbPromise; await db.runAsync('INSERT INTO packages (id, medication_id, quantity_initial, quantity_remaining, unit, expires_on, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', id('pack'), medicationId, quantity, quantity, unit, expiresOn, isoNow()); await refresh();
@@ -93,7 +97,7 @@ export function MedicationProvider({ children }: { children: React.ReactNode }) 
     if ((!duplicate || duplicateMode === 'separate') && input.scheduleKind !== 'as-needed') {
       for (const reminder of input.reminders) await db.runAsync('INSERT INTO schedules (id, medication_id, kind, weekdays_json, time, dose_quantity, dose_unit, start_on, end_on, interval_days, cycle_on_days, cycle_off_days, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)', id('schedule'), medicationId, input.scheduleKind, JSON.stringify(weekdaysFor(input.scheduleKind, input.weekdays)), reminder.time, reminder.doseQuantity, input.stockUnit, input.startOn, input.endOn, input.intervalDays, input.cycleOnDays, input.cycleOffDays);
     }
-    await refresh(); return 'created' as const;
+    await refresh(); await syncScheduledReminders(); return 'created' as const;
   }, [medications, refresh]);
   const takeDose = useCallback(async (doseId: string) => {
     const db = await dbPromise; const dose = await db.getFirstAsync<{ medication_id: string; quantity: number; unit: StockUnit }>('SELECT medication_id, quantity, unit FROM dose_events WHERE id = ?', doseId); if (!dose) return;
@@ -102,7 +106,7 @@ export function MedicationProvider({ children }: { children: React.ReactNode }) 
   }, [refresh]);
   const skipDose = useCallback(async (doseId: string) => { const db = await dbPromise; await db.runAsync("UPDATE dose_events SET status = 'skipped', completed_at = ? WHERE id = ?", isoNow(), doseId); await refresh(); }, [refresh]);
   const takeAsNeeded = useCallback(async (medicationId: string) => { const medication = medications.find((item) => item.id === medicationId); if (!medication) return; const unit: StockUnit = medication.form === 'Жидкость' ? 'мл' : 'шт.'; const db = await dbPromise; const doseId = id('manual'); await db.runAsync("INSERT INTO dose_events (id, schedule_id, medication_id, scheduled_on, scheduled_time, quantity, unit, status, source, completed_at) VALUES (?, NULL, ?, ?, ?, 1, ?, 'pending', 'manual', NULL)", doseId, medicationId, dateKey(), new Date().toTimeString().slice(0, 5), unit); await takeDose(doseId); }, [medications, takeDose]);
-  const value = useMemo(() => ({ medications, todayDoses, ready, addMedication, addPackage, takeDose, skipDose, takeAsNeeded, remainingStock: (medication: Medication) => medication.packages.reduce((sum, pack) => sum + pack.remainingQuantity, 0) }), [addMedication, addPackage, medications, ready, skipDose, takeAsNeeded, takeDose, todayDoses]);
+  const value = useMemo(() => ({ medications, todayDoses, ready, addMedication, addPackage, takeDose, skipDose, takeAsNeeded, enableReminders, remainingStock: (medication: Medication) => medication.packages.reduce((sum, pack) => sum + pack.remainingQuantity, 0) }), [addMedication, addPackage, medications, ready, skipDose, takeAsNeeded, takeDose, todayDoses]);
   return <MedicationContext.Provider value={value}>{children}</MedicationContext.Provider>;
 }
 
