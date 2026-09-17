@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 import { enableReminders, syncScheduledReminders } from '@/services/reminders';
 
-export type MedicationForm = 'Капсула' | 'Таблетка' | 'Жидкость';
+export type MedicationForm = 'Капсула' | 'Таблетка' | 'Жидкость' | 'Капли' | 'Сироп' | 'Инъекция' | 'Мазь' | 'Спрей' | 'Порошок';
 export type StrengthUnit = 'мг' | 'мкг' | 'г' | 'мл';
 export type StockUnit = 'шт.' | 'мл';
 export type ScheduleKind = 'daily' | 'weekdays' | 'custom' | 'every-n-days' | 'cycle' | 'as-needed';
@@ -15,6 +15,8 @@ export type Schedule = { id: string; kind: Exclude<ScheduleKind, 'as-needed'>; t
 export type Medication = { id: string; name: string; form: MedicationForm; amount: string; unit: StrengthUnit; color: string; packages: Package[]; schedules: Schedule[] };
 export type TodayDose = { id: string; medicationId: string; medicationName: string; color: string; form: MedicationForm; amount: string; unit: StrengthUnit; time: string; quantity: number; stockUnit: StockUnit; status: DoseStatus; isManual: boolean };
 export type NewMedication = { name: string; form: MedicationForm; amount: string; unit: StrengthUnit; color: string; scheduleKind: ScheduleKind; weekdays: number[]; reminders: Reminder[]; intervalDays: number; cycleOnDays: number; cycleOffDays: number; startOn: string; endOn: string | null; stockUnit: StockUnit; stockQuantity: number; expiresOn: string | null };
+
+export const stockUnitFor = (form: MedicationForm): StockUnit => ['Жидкость', 'Капли', 'Сироп'].includes(form) ? 'мл' : 'шт.';
 
 type MedicationContextValue = {
   medications: Medication[]; todayDoses: TodayDose[]; ready: boolean;
@@ -105,7 +107,7 @@ export function MedicationProvider({ children }: { children: React.ReactNode }) 
     await db.withTransactionAsync(async () => { for (const pack of packs) { if (needed <= 0) break; const used = Math.min(needed, pack.quantity_remaining); await db.runAsync('UPDATE packages SET quantity_remaining = quantity_remaining - ? WHERE id = ?', used, pack.id); needed -= used; } await db.runAsync("UPDATE dose_events SET status = 'taken', completed_at = ? WHERE id = ?", isoNow(), doseId); }); await refresh();
   }, [refresh]);
   const skipDose = useCallback(async (doseId: string) => { const db = await dbPromise; await db.runAsync("UPDATE dose_events SET status = 'skipped', completed_at = ? WHERE id = ?", isoNow(), doseId); await refresh(); }, [refresh]);
-  const takeAsNeeded = useCallback(async (medicationId: string) => { const medication = medications.find((item) => item.id === medicationId); if (!medication) return; const unit: StockUnit = medication.form === 'Жидкость' ? 'мл' : 'шт.'; const db = await dbPromise; const doseId = id('manual'); await db.runAsync("INSERT INTO dose_events (id, schedule_id, medication_id, scheduled_on, scheduled_time, quantity, unit, status, source, completed_at) VALUES (?, NULL, ?, ?, ?, 1, ?, 'pending', 'manual', NULL)", doseId, medicationId, dateKey(), new Date().toTimeString().slice(0, 5), unit); await takeDose(doseId); }, [medications, takeDose]);
+  const takeAsNeeded = useCallback(async (medicationId: string) => { const medication = medications.find((item) => item.id === medicationId); if (!medication) return; const unit = stockUnitFor(medication.form); const db = await dbPromise; const doseId = id('manual'); await db.runAsync("INSERT INTO dose_events (id, schedule_id, medication_id, scheduled_on, scheduled_time, quantity, unit, status, source, completed_at) VALUES (?, NULL, ?, ?, ?, 1, ?, 'pending', 'manual', NULL)", doseId, medicationId, dateKey(), new Date().toTimeString().slice(0, 5), unit); await takeDose(doseId); }, [medications, takeDose]);
   const value = useMemo(() => ({ medications, todayDoses, ready, addMedication, addPackage, takeDose, skipDose, takeAsNeeded, enableReminders, remainingStock: (medication: Medication) => medication.packages.reduce((sum, pack) => sum + pack.remainingQuantity, 0) }), [addMedication, addPackage, medications, ready, skipDose, takeAsNeeded, takeDose, todayDoses]);
   return <MedicationContext.Provider value={value}>{children}</MedicationContext.Provider>;
 }
