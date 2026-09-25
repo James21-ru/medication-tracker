@@ -45,6 +45,7 @@
         "expo-camera",
         {
           "cameraPermission": "LifeCare использует камеру, чтобы считывать штрихкоды на упаковках лекарств и навести камеру на назначение врача. Снимки не сохраняются и не отправляются.",
+          "microphonePermission": false,
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": true
         }
