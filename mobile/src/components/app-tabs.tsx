@@ -27,6 +27,22 @@ export default function AppTabs() {
           renderingMode="template"
         />
       </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="lifetab">
+        <NativeTabs.Trigger.Label>LifeTab</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'pills', selected: 'pills.fill' }}
+          md={{ default: 'medication', selected: 'medication' }}
+        />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="account">
+        <NativeTabs.Trigger.Label>Профиль</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'person.crop.circle', selected: 'person.crop.circle.fill' }}
+          md={{ default: 'account_circle', selected: 'account_circle' }}
+        />
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }

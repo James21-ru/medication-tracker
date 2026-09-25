@@ -2,7 +2,7 @@
 
 ## Decision
 
-Build an offline-first Expo application. The initial release stores health-related records only on the device and does not require an account, a backend, or cloud infrastructure.
+Build an offline-first Expo application. SQLite remains the local operational database; an optional account adds encrypted-in-transit cloud backup and cross-device synchronization through Supabase Auth and PostgreSQL.
 
 ## Why this is the right first architecture
 
@@ -34,10 +34,10 @@ System integration: local notifications
 
 ## Deliberately deferred
 
-- Accounts, authentication, sync, sharing, and caregiver access.
-- FastAPI, PostgreSQL, Yandex Cloud, and Yandex GPT.
+- Caregiver access and shared medication plans.
+- Medicine catalog, interaction checks, and treatment guidance.
 - Medicine catalog, camera recognition, interactions, and health recommendations.
 
-## Evolution path
+## Cloud evolution path
 
-When interviews validate a need for cross-device backup or caregiver access, add FastAPI + PostgreSQL behind a versioned API. The local repository remains the source for offline interaction; sync becomes an additive capability.
+Accounts and backup are now being introduced as optional capabilities. The local repository remains the source for offline interaction; sync is additive and must not block medication tracking. The cloud model and synchronization contract are documented in [cloud-sync.md](cloud-sync.md).

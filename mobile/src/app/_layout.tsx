@@ -6,6 +6,7 @@ import { Platform, useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
+import { AuthProvider } from '@/context/auth';
 import { MedicationProvider } from '@/context/medications';
 import { configureReminders } from '@/services/reminders';
 
@@ -25,10 +26,12 @@ export default function TabLayout() {
   }, []);
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <MedicationProvider>
-        <AnimatedSplashOverlay />
-        <AppTabs />
-      </MedicationProvider>
+      <AuthProvider>
+        <MedicationProvider>
+          <AnimatedSplashOverlay />
+          <AppTabs />
+        </MedicationProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }
