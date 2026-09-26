@@ -33,7 +33,7 @@ export default function AccountScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#F7F8FA' },
   safeArea: { flex: 1 },
-  content: { flexGrow: 1, padding: 20, paddingBottom: 116, paddingTop: 30 },
+  content: { flexGrow: 1, padding: 20, paddingBottom: 24, paddingTop: 30 },
   eyebrow: { color: '#747A85', fontSize: 12, fontWeight: '700', letterSpacing: 0.8 },
   title: { color: '#15171B', fontSize: 36, fontWeight: '700', letterSpacing: -1.1, marginTop: 2 },
   intro: { color: '#69717D', fontSize: 16, lineHeight: 23, marginTop: 14 },
