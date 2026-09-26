@@ -2,15 +2,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CloudAccountCard } from '@/components/cloud-account-card';
+import { useAuth } from '@/context/auth';
 
 export default function AccountScreen() {
+  const { user } = useAuth();
   return (
     <View style={styles.screen}>
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Text style={styles.eyebrow}>ПРОФИЛЬ</Text>
           <Text style={styles.title}>Ваш аккаунт</Text>
-          <Text style={styles.intro}>Подключите Telegram, чтобы в дальнейшем сохранять резервную копию и синхронизировать данные между устройствами.</Text>
+          <Text style={styles.intro}>
+            {user
+              ? 'Вы вошли через Telegram. Этот аккаунт понадобится для резервной копии и синхронизации между устройствами.'
+              : 'Подключите Telegram, чтобы в дальнейшем сохранять резервную копию и синхронизировать данные между устройствами.'}
+          </Text>
 
           <CloudAccountCard />
 
@@ -27,7 +33,7 @@ export default function AccountScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#F7F8FA' },
   safeArea: { flex: 1 },
-  content: { flexGrow: 1, padding: 20, paddingBottom: 116, paddingTop: 30 },
+  content: { flexGrow: 1, padding: 20, paddingBottom: 24, paddingTop: 30 },
   eyebrow: { color: '#747A85', fontSize: 12, fontWeight: '700', letterSpacing: 0.8 },
   title: { color: '#15171B', fontSize: 36, fontWeight: '700', letterSpacing: -1.1, marginTop: 2 },
   intro: { color: '#69717D', fontSize: 16, lineHeight: 23, marginTop: 14 },

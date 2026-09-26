@@ -1,17 +1,27 @@
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
-import { useColorScheme } from 'react-native';
+import { Platform } from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { TabBarColors } from '@/constants/theme';
+
+// On iOS the system Liquid Glass bar picks icon and label colors that stay readable whether the glass
+// is light or darkened by the content behind it, so no colors are forced there. Android gets explicit
+// Material colors.
+const androidAppearance =
+  Platform.OS === 'android'
+    ? {
+        backgroundColor: TabBarColors.background,
+        indicatorColor: TabBarColors.indicator,
+        iconColor: { default: TabBarColors.idle, selected: TabBarColors.selected },
+        labelStyle: {
+          default: { color: TabBarColors.idle },
+          selected: { color: TabBarColors.selected, fontWeight: '600' as const },
+        },
+      }
+    : {};
 
 export default function AppTabs() {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
-
   return (
-    <NativeTabs
-      backgroundColor={colors.background}
-      indicatorColor={colors.backgroundElement}
-      labelStyle={{ selected: { color: colors.text } }}>
+    <NativeTabs {...androidAppearance}>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Сегодня</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon

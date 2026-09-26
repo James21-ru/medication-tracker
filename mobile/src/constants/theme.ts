@@ -24,6 +24,18 @@ export const Colors = {
   },
 } as const;
 
+/**
+ * Tab bar colors for Android's Material bottom navigation. On iOS the tab bar is left to the system:
+ * the Liquid Glass bar recolors icons and labels for the content behind it, which fixed colors
+ * would override (white labels vanished on light glass, graphite ones on dark glass).
+ */
+export const TabBarColors = {
+  background: '#F7F8FA',
+  indicator: '#E3E6EC',
+  selected: '#0759B8',
+  idle: '#3A3F47',
+} as const;
+
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 export const Fonts = Platform.select({
