@@ -94,7 +94,7 @@ function Feature({ number, title, text }: { number: string; title: string; text:
 const styles = StyleSheet.create({
   screen: { backgroundColor: '#EEF6FC', flex: 1 },
   safeArea: { flex: 1 },
-  content: { padding: 20, paddingBottom: 116 },
+  content: { padding: 20, paddingBottom: 32 },
   header: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
   eyebrow: { color: '#5D7180', fontSize: 10, fontWeight: '800', letterSpacing: 1.1 },
   title: { color: '#152331', fontSize: 36, fontWeight: '700', letterSpacing: -1.2, marginTop: 2 },

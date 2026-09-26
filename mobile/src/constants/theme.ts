@@ -25,13 +25,14 @@ export const Colors = {
 } as const;
 
 /**
- * Tab bar colors, fixed rather than following the system theme: the screens are always light, so
- * the translucent bar stays light too, and theme-based white labels vanished on it in dark mode.
- * Contrast (WCAG): selected 4.9:1 on the selected-tab highlight, idle 7.8:1.
+ * Tab bar colors, fixed rather than following the system theme because every screen is light.
+ * The bar is opaque: iOS 26's system tab bar is Liquid Glass and recolors itself from the content
+ * behind it (dark over the LifeTab video), which hid labels and let content show through.
+ * Contrast (WCAG) on the bar: selected 6.7:1, idle 10.6:1.
  */
 export const TabBarColors = {
-  background: '#F7F8FA',
-  indicator: '#E3E6EC',
+  background: '#FFFFFF',
+  border: '#E3E6EC',
   selected: '#0759B8',
   idle: '#3A3F47',
 } as const;
