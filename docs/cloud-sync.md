@@ -28,9 +28,9 @@ The mobile client is not connected to the cloud yet. This contract and the SQL m
 
 ## Telegram login
 
-Telegram Login must open in a secure web flow. Telegram returns a signed payload, and the Edge Function verifies its HMAC signature and freshness using the bot token stored only as a server secret. The mobile app receives no bot token or database service key.
+The app signs in with Telegram's OpenID Connect login in a secure web flow. The `telegram-login` Edge Function is the OIDC client: it keeps the client secret, verifies Telegram's ID token and issues the Supabase session. The mobile app receives no bot secret or database service key. See [telegram-login.md](telegram-login.md).
 
-Telegram requires a bot and a domain linked through BotFather. Keep email magic-link login as a recovery path: Telegram accounts can be lost or changed, while medication history must remain recoverable.
+Keep email magic-link login as a recovery path: Telegram accounts can be lost or changed, while medication history must remain recoverable.
 
 ## Before production
 
