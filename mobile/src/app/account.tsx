@@ -2,15 +2,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CloudAccountCard } from '@/components/cloud-account-card';
+import { useAuth } from '@/context/auth';
 
 export default function AccountScreen() {
+  const { user } = useAuth();
   return (
     <View style={styles.screen}>
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Text style={styles.eyebrow}>ПРОФИЛЬ</Text>
           <Text style={styles.title}>Ваш аккаунт</Text>
-          <Text style={styles.intro}>Подключите Telegram, чтобы в дальнейшем сохранять резервную копию и синхронизировать данные между устройствами.</Text>
+          <Text style={styles.intro}>
+            {user
+              ? 'Вы вошли через Telegram. Этот аккаунт понадобится для резервной копии и синхронизации между устройствами.'
+              : 'Подключите Telegram, чтобы в дальнейшем сохранять резервную копию и синхронизировать данные между устройствами.'}
+          </Text>
 
           <CloudAccountCard />
 

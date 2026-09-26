@@ -24,6 +24,18 @@ export const Colors = {
   },
 } as const;
 
+/**
+ * Tab bar colors, fixed rather than following the system theme: the screens are always light, so
+ * the translucent bar stays light too, and theme-based white labels vanished on it in dark mode.
+ * Contrast (WCAG): selected 4.9:1 on the selected-tab highlight, idle 7.8:1.
+ */
+export const TabBarColors = {
+  background: '#F7F8FA',
+  indicator: '#E3E6EC',
+  selected: '#0759B8',
+  idle: '#3A3F47',
+} as const;
+
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 export const Fonts = Platform.select({
