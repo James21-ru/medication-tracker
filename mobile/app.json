@@ -8,7 +8,11 @@
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "ru.lifecare.app",
+      "icon": "./assets/images/ios-icon.png",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "ru.lifecare.app",
@@ -21,8 +25,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.CAMERA"
       ]
     },
     "web": {
@@ -44,7 +47,9 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Разрешите доступ к камере, чтобы считывать штрихкоды лекарств.",
+          "cameraPermission": "LifeCare использует камеру, чтобы считывать штрихкоды на упаковках лекарств и навести камеру на назначение врача. Снимки не сохраняются и не отправляются.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
           "barcodeScannerEnabled": true
         }
       ],
@@ -60,6 +65,6 @@
         "projectId": "9979bc72-bbf2-4446-9b98-0df2d5dc59bf"
       }
     },
-    "owner": "den_kostritsyn"
+    "owner": "lifecare-team"
   }
 }
