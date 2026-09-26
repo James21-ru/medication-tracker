@@ -4,16 +4,28 @@
  */
 import { assert, assertEquals, assertNotEquals } from 'jsr:@std/assert@1';
 import { createClient } from 'npm:@supabase/supabase-js@2.117.0';
+import postgres from 'npm:postgres@3.4.9';
 
 import { randomToken, sha256Base64Url } from '../../telegram-login/crypto.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? 'http://127.0.0.1:55421';
 const ANON_KEY = Deno.env.get('ANON_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SERVICE_ROLE_KEY')!;
+const DB_URL = Deno.env.get('DB_URL') ?? 'postgresql://postgres:postgres@127.0.0.1:55422/postgres';
 const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/telegram-login`;
 const APP_REDIRECT = 'lifecare://auth/telegram';
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
+
+// Direct database access: the stack runs without the Data API, like the Mini App's project.
+async function query<T>(run: (sql: postgres.Sql) => Promise<T>): Promise<T> {
+  const sql = postgres(DB_URL, { max: 1 });
+  try {
+    return await run(sql);
+  } finally {
+    await sql.end();
+  }
+}
 
 function appClient() {
   return createClient(SUPABASE_URL, ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
@@ -81,8 +93,17 @@ Deno.test('a new Telegram user gets one account, a profile and a restorable sess
   assertEquals(user.user_metadata.telegram_id, newUserId);
   assertEquals(user.user_metadata.full_name, `Test User ${newUserId}`);
 
-  const { data: profile } = await client.from('lifecare_profiles').select('telegram_user_id, display_name').single();
-  assertEquals(profile, { telegram_user_id: newUserId, display_name: `Test User ${newUserId}` });
+  const accounts = await query((sql) =>
+    sql`
+    select user_id, telegram_user_id, display_name from mobile_auth.telegram_accounts where telegram_user_id = ${newUserId}`
+  );
+  assertEquals(
+    accounts.map((row) => ({ user_id: row.user_id, telegram_user_id: Number(row.telegram_user_id), display_name: row.display_name })),
+    [
+      { user_id: user.id, telegram_user_id: newUserId, display_name: `Test User ${newUserId}` },
+    ],
+  );
+  assert(client);
 
   // What the app does after a restart: restore from the refresh token.
   const restored = appClient();
@@ -110,12 +131,34 @@ Deno.test('an account created by the previous widget login is reused', async () 
   assertEquals((await usersWithEmail(email)).length, 1);
 });
 
-Deno.test('app clients cannot read login attempts', async () => {
-  const { client } = await signIn(newUserId);
-  const { data } = await client.from('telegram_login_attempts').select('*');
-  assertEquals(data ?? [], []);
-  const { data: anonData } = await appClient().from('telegram_login_attempts').select('*');
-  assertEquals(anonData ?? [], []);
+Deno.test('the Data API is off and client roles cannot reach mobile_auth', async () => {
+  const rest = await fetch(`${SUPABASE_URL}/rest/v1/`, { headers: { apikey: ANON_KEY } });
+  await rest.body?.cancel();
+  assertNotEquals(rest.status, 200, 'run the stack without PostgREST: supabase start -x postgrest,...');
+
+  const [privileges] = await query((sql) =>
+    sql`
+    select has_schema_privilege('anon', 'mobile_auth', 'USAGE') as anon_schema,
+           has_schema_privilege('authenticated', 'mobile_auth', 'USAGE') as auth_schema,
+           has_table_privilege('anon', 'mobile_auth.login_attempts', 'SELECT,INSERT,UPDATE,DELETE') as anon_attempts,
+           has_table_privilege('authenticated', 'mobile_auth.login_attempts', 'SELECT,INSERT,UPDATE,DELETE') as auth_attempts,
+           has_table_privilege('anon', 'mobile_auth.telegram_accounts', 'SELECT,INSERT,UPDATE,DELETE') as anon_accounts,
+           has_table_privilege('authenticated', 'mobile_auth.telegram_accounts', 'SELECT,INSERT,UPDATE,DELETE') as auth_accounts`
+  );
+  assertEquals(Object.values(privileges), [false, false, false, false, false, false]);
+});
+
+Deno.test('the login needs no sign-ups: the project keeps public sign-up disabled', async () => {
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+    method: 'POST',
+    headers: { apikey: ANON_KEY, 'content-type': 'application/json' },
+    body: JSON.stringify({ email: `probe-${run}@example.com`, password: 'probe-password-123' }),
+  });
+  const body = await response.json();
+  assertNotEquals(response.status, 200, `sign-up must be disabled for this test run: ${JSON.stringify(body)}`);
+  // …and signing in through Telegram still works for a brand new user.
+  const { user } = await signIn(9_000_000_000 + run);
+  assertEquals(user.email, `telegram-${9_000_000_000 + run}@telegram.lifecare.invalid`);
 });
 
 Deno.test('the app code needs the app verifier and works once', async () => {
