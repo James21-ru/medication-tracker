@@ -1,8 +1,9 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { CloudAccountCard } from '@/components/cloud-account-card';
 import { useAuth } from '@/context/auth';
+import { Text } from '@/components/manrope-text';
 
 export default function AccountScreen() {
   const { user } = useAuth();

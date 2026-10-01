@@ -1,6 +1,7 @@
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Medication, StockUnit, stockUnitFor } from '@/context/medications';
+import { Text } from '@/components/manrope-text';
 
 type Props = { medication: Medication | null; remainingStock: number; onClose: () => void; onDelete: (medicationId: string) => void };
 

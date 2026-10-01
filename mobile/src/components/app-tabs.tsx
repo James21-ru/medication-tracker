@@ -13,8 +13,8 @@ const androidAppearance =
         indicatorColor: TabBarColors.indicator,
         iconColor: { default: TabBarColors.idle, selected: TabBarColors.selected },
         labelStyle: {
-          default: { color: TabBarColors.idle },
-          selected: { color: TabBarColors.selected, fontWeight: '600' as const },
+          default: { color: TabBarColors.idle, fontFamily: 'Manrope_500Medium' },
+          selected: { color: TabBarColors.selected, fontFamily: 'Manrope_700Bold' },
         },
       }
     : {};

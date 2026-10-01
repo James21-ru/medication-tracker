@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AddMedicationFlow } from '@/components/add-medication-flow';
 import { BarcodeScannerSheet } from '@/components/barcode-scanner-sheet';
 import { MedicationDetailsSheet } from '@/components/medication-details-sheet';
+import { Text, TextInput } from '@/components/manrope-text';
 import { Medication, StockUnit, stockUnitFor, useMedications } from '@/context/medications';
 
 const maskDate = (value: string) => { const digits = value.replace(/\D/g, '').slice(0, 6); return digits.length > 4 ? `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4)}` : digits.length > 2 ? `${digits.slice(0, 2)}.${digits.slice(2)}` : digits; };

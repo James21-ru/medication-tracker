@@ -36,6 +36,7 @@ type MedicationContextValue = {
 
 const MedicationContext = createContext<MedicationContextValue | null>(null);
 const dbPromise = SQLite.openDatabaseAsync('medication-tracker.db');
+let migrationPromise: Promise<void> | null = null;
 const dayMs = 24 * 60 * 60 * 1000;
 const id = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const dateKey = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -44,7 +45,17 @@ const parseDate = (value: string) => new Date(`${value}T12:00:00`);
 const sameMedication = (left: NewMedication, right: Medication) => left.name.trim().toLowerCase() === right.name.trim().toLowerCase() && left.form === right.form && left.amount.trim() === right.amount && left.unit === right.unit;
 const weekdaysFor = (kind: ScheduleKind, selected: number[]) => kind === 'daily' ? [0, 1, 2, 3, 4, 5, 6] : kind === 'weekdays' ? [1, 2, 3, 4, 5] : selected;
 
-async function migrate(db: SQLite.SQLiteDatabase) {
+function migrate(db: SQLite.SQLiteDatabase) {
+  if (!migrationPromise) {
+    migrationPromise = applyMigrations(db).catch((error: unknown) => {
+      migrationPromise = null;
+      throw error;
+    });
+  }
+  return migrationPromise;
+}
+
+async function applyMigrations(db: SQLite.SQLiteDatabase) {
   await db.execAsync(`
     PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;
     CREATE TABLE IF NOT EXISTS medications (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, form TEXT NOT NULL, amount TEXT NOT NULL, unit TEXT NOT NULL, color TEXT NOT NULL, barcode TEXT, created_at TEXT NOT NULL);

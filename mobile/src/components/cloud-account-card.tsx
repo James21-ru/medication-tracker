@@ -1,6 +1,7 @@
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { useAuth } from '@/context/auth';
+import { Text } from '@/components/manrope-text';
 
 export function CloudAccountCard() {
   const { configured, loading, user, signInWithTelegram, signOut } = useAuth();

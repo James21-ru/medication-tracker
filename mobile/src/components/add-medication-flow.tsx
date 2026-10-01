@@ -1,8 +1,9 @@
 // @ts-nocheck
 import { useEffect, useState } from 'react';
-import { Alert, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableWithoutFeedback, View } from 'react-native';
+import { Alert, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, TouchableWithoutFeedback, View } from 'react-native';
 
 import { MedicationForm, NewMedication, Reminder, ScheduleKind, StockUnit, stockUnitFor, StrengthUnit, useMedications } from '@/context/medications';
+import { Text, TextInput } from '@/components/manrope-text';
 
 type Props = { visible: boolean; onClose: () => void; initialBarcode?: string | null; initialPath?: Path | null; onScanPrescription?: () => void };
 type Path = 'quick' | 'schedule';

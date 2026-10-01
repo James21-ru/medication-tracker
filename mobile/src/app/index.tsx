@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AddMedicationFlow } from '@/components/add-medication-flow';
 import { BarcodeScannerSheet } from '@/components/barcode-scanner-sheet';
 import { NotificationSettingsSheet } from '@/components/notification-settings-sheet';
+import { Text } from '@/components/manrope-text';
 import { Medication, Schedule, TodayDose, useMedications } from '@/context/medications';
 import { SystemNotificationPermission } from '@/services/reminders';
 import { createMedicationReport, shareMedicationReport } from '@/services/medication-report';

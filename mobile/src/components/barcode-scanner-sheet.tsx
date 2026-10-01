@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Text } from '@/components/manrope-text';
 
 type Props = { visible: boolean; onClose: () => void; onScanned?: (barcode: string) => void; mode?: 'barcode' | 'prescription' };
 
