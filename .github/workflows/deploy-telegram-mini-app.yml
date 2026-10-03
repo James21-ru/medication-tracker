@@ -1,0 +1,44 @@
+name: Deploy Telegram Mini App
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'telegram-mini-app/**'
+      - '.github/workflows/deploy-telegram-mini-app.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: telegram-mini-app-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: telegram-mini-app/package-lock.json
+      - run: npm ci
+        working-directory: telegram-mini-app
+      - run: npm run build
+        working-directory: telegram-mini-app
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: telegram-mini-app/dist
+      - id: deployment
+        uses: actions/deploy-pages@v4

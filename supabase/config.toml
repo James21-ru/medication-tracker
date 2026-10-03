@@ -408,3 +408,8 @@ enabled = true
 # Telegram and the in-app browser reach this function without a Supabase JWT;
 # every step is protected by one-time state and PKCE instead.
 verify_jwt = false
+
+[functions.telegram-mini-session]
+# Telegram supplies signed init data instead of a Supabase JWT. The function validates
+# the signature using TELEGRAM_BOT_TOKEN before it creates a session.
+verify_jwt = false
