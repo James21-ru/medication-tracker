@@ -196,23 +196,24 @@ async function runMutation(sql: ReturnType<typeof postgres>, ownerId: string, mu
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return new Response(JSON.stringify({ error: 'method_not_allowed' }), { status: 405, headers: corsHeaders });
+  let sql: ReturnType<typeof postgres> | null = null;
   try {
     const body = await request.json() as { init_data?: unknown; mutation?: unknown };
     if (typeof body.init_data !== 'string') throw new Error('missing init data');
     const user = await verifyInitData(body.init_data, requiredEnv('TELEGRAM_BOT_TOKEN'));
     const supabase = createClient(requiredEnv('SUPABASE_URL'), serviceKey(), { auth: { autoRefreshToken: false, persistSession: false } });
-    const sql = postgres(Deno.env.get('LIFECARE_DB_URL') ?? requiredEnv('SUPABASE_DB_URL'), { prepare: false, max: 1, idle_timeout: 20 });
+    sql = postgres(Deno.env.get('LIFECARE_DB_URL') ?? requiredEnv('SUPABASE_DB_URL'), { prepare: false, max: 1, idle_timeout: 20 });
     if (body.mutation) {
       const account = await ensureTelegramAccount(supabase, sql, user);
       const result = await runMutation(sql, account.userId, parseMutation(body.mutation));
-      await sql.end({ timeout: 1 });
       return new Response(JSON.stringify(result), { headers: corsHeaders });
     }
     const session = await issueLoginToken(supabase, sql, user);
-    await sql.end({ timeout: 1 });
     return new Response(JSON.stringify({ token_hash: session.tokenHash }), { headers: corsHeaders });
   } catch (error) {
     console.error(`[telegram-mini-session] ${error instanceof Error ? error.message : String(error)}`);
     return new Response(JSON.stringify({ error: 'authentication_failed' }), { status: 401, headers: corsHeaders });
+  } finally {
+    if (sql) await sql.end({ timeout: 1 });
   }
 });

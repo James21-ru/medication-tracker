@@ -44,10 +44,10 @@ export function App() {
     await loadData(selectedDate);
   }
 
-  async function loadData(forDate = selectedDate) {
+  async function loadData(forDate = selectedDate, showLoading = true) {
     if (!supabase) return;
     const requestId = ++loadRequestId.current;
-    setLoading(true);
+    if (showLoading) setLoading(true);
     try {
       const [medicationsResult, packagesResult, dosesResult, schedulesResult] = await Promise.all([
         supabase.from('medications').select('id,name,form,amount,unit,color').is('deleted_at', null).order('created_at', { ascending: false }),
@@ -62,7 +62,7 @@ export function App() {
     } catch {
       if (requestId === loadRequestId.current) setMessage('Не удалось загрузить данные. Проверьте подключение и попробуйте ещё раз.');
     } finally {
-      if (requestId === loadRequestId.current) setLoading(false);
+      if (showLoading && requestId === loadRequestId.current) setLoading(false);
     }
   }
 
@@ -76,9 +76,17 @@ export function App() {
     if (!supabase) throw new Error('Действие недоступно: Mini App не подключён к Supabase.');
     const app = prepareTelegramApp();
     if (!app?.initData) throw new Error('Откройте LifeCare из Telegram, чтобы подтвердить действие.');
-    const result = await supabase.functions.invoke('telegram-mini-session', { body: { init_data: app.initData, mutation } });
-    if (result.error || !result.data) throw new Error('Не удалось подтвердить действие. Попробуйте ещё раз.');
-    return result.data as { status: string; available?: number; unit?: string };
+    let timeoutId: number | undefined;
+    try {
+      const result = await Promise.race([
+        supabase.functions.invoke('telegram-mini-session', { body: { init_data: app.initData, mutation } }),
+        new Promise<never>((_, reject) => { timeoutId = window.setTimeout(() => reject(new Error('Сервер не ответил за 15 секунд. Проверьте сеть и повторите действие.')), 15_000); }),
+      ]);
+      if (result.error || !result.data) throw new Error('Не удалось подтвердить действие. Попробуйте ещё раз.');
+      return result.data as { status: string; available?: number; unit?: string };
+    } finally {
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    }
   }
   async function markDose(dose: Dose, status: 'taken' | 'skipped') {
     if (dose.status !== 'pending') return;
@@ -87,7 +95,24 @@ export function App() {
     try {
       const result = await runTelegramMutation({ type: 'complete_dose', dose_id: dose.id, status });
       if (result.status === 'insufficient_stock') { setMessage(`Недостаточно препарата в аптечке: доступно ${result.available ?? 0} ${result.unit ?? ''}. Добавьте упаковку перед отметкой приёма.`); return; }
-      await loadData();
+      const completedStatus = result.status === 'taken' ? 'taken' : 'skipped';
+      setDoses((current) => current.map((item) => item.id === dose.id ? { ...item, status: completedStatus } : item));
+      if (completedStatus === 'taken') {
+        setPackages((current) => {
+          let remaining = Number(dose.quantity);
+          const next = current.map((item) => ({ ...item }));
+          const available = next.filter((item) => item.medication_id === dose.medication_id && item.unit === dose.unit && Number(item.quantity_remaining) > 0 && (!item.expires_on || item.expires_on >= dateKey(today()))).sort((left, right) => (left.expires_on ?? '9999-12-31').localeCompare(right.expires_on ?? '9999-12-31'));
+          for (const pack of available) {
+            if (remaining <= 0) break;
+            const used = Math.min(remaining, Number(pack.quantity_remaining));
+            pack.quantity_remaining = Number(pack.quantity_remaining) - used;
+            remaining -= used;
+          }
+          return next;
+        });
+      }
+      setMessage(null);
+      void loadData(selectedDate, false);
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Не удалось обновить приём. Попробуйте ещё раз.'); }
     finally { updatingDoseIds.current.delete(dose.id); setUpdatingDoseId((current) => current === dose.id ? null : current); }
   }
@@ -98,16 +123,26 @@ export function App() {
     if (!draft.name.trim() || !draft.amount.trim() || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(doseQuantity) || doseQuantity <= 0 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(draft.scheduleTime)) { setMessage('Заполните данные препарата, упаковки и ежедневного приёма.'); return; }
     const stockUnit = ['Жидкость', 'Капли', 'Сироп'].includes(draft.form) ? 'мл' : 'шт.';
     const medicationId = makeId('med');
-    await runTelegramMutation({ type: 'create_medication', medication_id: medicationId, package_id: makeId('pack'), schedule_id: makeId('schedule'), name: draft.name.trim(), form: draft.form, amount: draft.amount.trim(), medication_unit: draft.unit, color: '#20A278', quantity, stock_unit: stockUnit, expires_on: draft.expiresOn || null, schedule_time: draft.scheduleTime, dose_quantity: doseQuantity, start_on: dateKey(today()) });
-    setShowAddMedication(false); await loadData();
+    const packageId = makeId('pack');
+    const scheduleId = makeId('schedule');
+    await runTelegramMutation({ type: 'create_medication', medication_id: medicationId, package_id: packageId, schedule_id: scheduleId, name: draft.name.trim(), form: draft.form, amount: draft.amount.trim(), medication_unit: draft.unit, color: '#20A278', quantity, stock_unit: stockUnit, expires_on: draft.expiresOn || null, schedule_time: draft.scheduleTime, dose_quantity: doseQuantity, start_on: dateKey(today()) });
+    setMedications((current) => [{ id: medicationId, name: draft.name.trim(), form: draft.form, amount: draft.amount.trim(), unit: draft.unit, color: '#20A278' }, ...current]);
+    setPackages((current) => [{ id: packageId, medication_id: medicationId, quantity_remaining: quantity, unit: stockUnit, expires_on: draft.expiresOn || null }, ...current]);
+    setSchedules((current) => [{ medication_id: medicationId, scheduled_time: draft.scheduleTime, dose_quantity: doseQuantity, dose_unit: stockUnit }, ...current]);
+    if (dateKey(selectedDate) === dateKey(today())) setDoses((current) => [...current, { id: `${scheduleId}-dose-${dateKey(today()).replaceAll('-', '')}`, medication_id: medicationId, scheduled_time: draft.scheduleTime, quantity: doseQuantity, unit: stockUnit, status: 'pending' as const }].sort((left, right) => left.scheduled_time.localeCompare(right.scheduled_time)));
+    setShowAddMedication(false);
+    void loadData(selectedDate, false);
   }
   async function addPackage(medication: Medication, quantityText: string, expiresOn: string) {
     if (!supabase) throw new Error('Сохранение недоступно: Mini App не подключён к Supabase. Попробуйте позже.');
     const quantity = Number(quantityText);
     if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('Укажите количество в упаковке.');
     const unit = ['Жидкость', 'Капли', 'Сироп'].includes(medication.form) ? 'мл' : 'шт.';
-    await runTelegramMutation({ type: 'add_package', medication_id: medication.id, package_id: makeId('pack'), quantity, stock_unit: unit, expires_on: expiresOn || null });
-    setPackageMedication(null); await loadData();
+    const packageId = makeId('pack');
+    await runTelegramMutation({ type: 'add_package', medication_id: medication.id, package_id: packageId, quantity, stock_unit: unit, expires_on: expiresOn || null });
+    setPackages((current) => [{ id: packageId, medication_id: medication.id, quantity_remaining: quantity, unit, expires_on: expiresOn || null }, ...current]);
+    setPackageMedication(null);
+    void loadData(selectedDate, false);
   }
 
   const title = tab === 'doses' ? 'Приёмы' : tab === 'cabinet' ? 'Аптечка' : 'LifeTab';
