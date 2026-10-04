@@ -35,6 +35,7 @@ jobs:
       - run: npm run build
         working-directory: telegram-mini-app
         env:
+          MINI_APP_BASE: /medication-tracker/
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
       - uses: actions/upload-pages-artifact@v4
