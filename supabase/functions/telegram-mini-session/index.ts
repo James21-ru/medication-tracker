@@ -152,10 +152,14 @@ function parseMutation(value: unknown): Mutation {
 async function runMutation(sql: ReturnType<typeof postgres>, ownerId: string, mutation: Mutation) {
   if (mutation.type === 'create_medication') {
     await sql.begin(async (transaction) => {
-      await transaction`insert into public.medications (id, owner_id, name, form, amount, unit, color, created_at) values (${mutation.medication_id}, ${ownerId}, ${mutation.name}, ${mutation.form}, ${mutation.amount}, ${mutation.medication_unit}, ${mutation.color}, now())`;
-      await transaction`insert into public.medication_packages (id, owner_id, medication_id, quantity_initial, quantity_remaining, unit, expires_on, created_at) values (${mutation.package_id}, ${ownerId}, ${mutation.medication_id}, ${mutation.quantity}, ${mutation.quantity}, ${mutation.stock_unit}, ${mutation.expires_on}, now())`;
+      if (mutation.expires_on) {
+        const dates = await transaction<{ expired: boolean }[]>`select ${mutation.expires_on}::date < current_date as expired`;
+        if (dates[0]?.expired) throw new Error('package expiry is in the past');
+      }
+      await transaction`insert into public.medications (id, owner_id, name, form, amount, unit, color, created_at) values (${mutation.medication_id}, ${ownerId}, ${mutation.name}, ${mutation.form}, ${mutation.amount}, ${mutation.medication_unit}, ${mutation.color}, now()) on conflict (id) do nothing`;
+      await transaction`insert into public.medication_packages (id, owner_id, medication_id, quantity_initial, quantity_remaining, unit, expires_on, created_at) values (${mutation.package_id}, ${ownerId}, ${mutation.medication_id}, ${mutation.quantity}, ${mutation.quantity}, ${mutation.stock_unit}, ${mutation.expires_on}, now()) on conflict (id) do nothing`;
       for (const schedule of mutation.schedules) {
-        await transaction`insert into public.medication_schedules (id, owner_id, medication_id, kind, weekdays_json, scheduled_time, dose_quantity, dose_unit, start_on, interval_days, cycle_on_days, cycle_off_days, active, created_at) values (${schedule.id}, ${ownerId}, ${mutation.medication_id}, 'daily', ${JSON.stringify([0, 1, 2, 3, 4, 5, 6])}::jsonb, ${schedule.time}, ${schedule.quantity}, ${mutation.stock_unit}, ${mutation.start_on}, 1, 1, 0, true, now())`;
+        await transaction`insert into public.medication_schedules (id, owner_id, medication_id, kind, weekdays_json, scheduled_time, dose_quantity, dose_unit, start_on, interval_days, cycle_on_days, cycle_off_days, active, created_at) values (${schedule.id}, ${ownerId}, ${mutation.medication_id}, 'daily', ${JSON.stringify([0, 1, 2, 3, 4, 5, 6])}::jsonb, ${schedule.time}, ${schedule.quantity}, ${mutation.stock_unit}, ${mutation.start_on}, 1, 1, 0, true, now()) on conflict (id) do nothing`;
         await transaction`
           insert into public.dose_events (id, owner_id, schedule_id, medication_id, scheduled_on, scheduled_time, quantity, unit, status, source, created_at)
           select
@@ -173,7 +177,11 @@ async function runMutation(sql: ReturnType<typeof postgres>, ownerId: string, mu
     await sql.begin(async (transaction) => {
       const medications = await transaction<{ id: string }[]>`select id from public.medications where id = ${mutation.medication_id} and owner_id = ${ownerId} and deleted_at is null for update`;
       if (!medications[0]) throw new Error('medication not found');
-      await transaction`insert into public.medication_packages (id, owner_id, medication_id, quantity_initial, quantity_remaining, unit, expires_on, created_at) values (${mutation.package_id}, ${ownerId}, ${mutation.medication_id}, ${mutation.quantity}, ${mutation.quantity}, ${mutation.stock_unit}, ${mutation.expires_on}, now())`;
+      if (mutation.expires_on) {
+        const dates = await transaction<{ expired: boolean }[]>`select ${mutation.expires_on}::date < current_date as expired`;
+        if (dates[0]?.expired) throw new Error('package expiry is in the past');
+      }
+      await transaction`insert into public.medication_packages (id, owner_id, medication_id, quantity_initial, quantity_remaining, unit, expires_on, created_at) values (${mutation.package_id}, ${ownerId}, ${mutation.medication_id}, ${mutation.quantity}, ${mutation.quantity}, ${mutation.stock_unit}, ${mutation.expires_on}, now()) on conflict (id) do nothing`;
     });
     return { status: 'created' };
   }

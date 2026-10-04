@@ -19,6 +19,7 @@ const blankDraft: MedicationDraft = { name: '', form: 'Таблетка', amount
 export function App() {
   const [tab, setTab] = useState<Tab>('doses');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [medications, setMedications] = useState<Medication[]>([]);
@@ -74,7 +75,8 @@ export function App() {
   const schedulesByMedication = useMemo(() => schedules.reduce<Map<string, MedicationSchedule[]>>((result, item) => { result.set(item.medication_id, [...(result.get(item.medication_id) ?? []), item]); return result; }, new Map()), [schedules]);
   const showNotice = (text: string) => { setNotice(text); window.setTimeout(() => setNotice((current) => current === text ? null : current), 4000); };
 
-  async function chooseDate(date: Date) { setSelectedDate(date); await loadData(date); }
+  async function chooseDate(date: Date) { setSelectedDate(date); await loadData(date, false); }
+  async function refreshData() { setRefreshing(true); try { await loadData(selectedDate, false); } finally { setRefreshing(false); } }
   async function runTelegramMutation(mutation: Record<string, unknown>) {
     if (!supabase) throw new Error('Действие недоступно: Mini App не подключён к Supabase.');
     const app = prepareTelegramApp();
@@ -120,14 +122,14 @@ export function App() {
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Не удалось обновить приём. Попробуйте ещё раз.'); }
     finally { updatingDoseIds.current.delete(dose.id); setUpdatingDoseId((current) => current === dose.id ? null : current); }
   }
-  async function addMedication(draft: MedicationDraft) {
+  async function addMedication(draft: MedicationDraft, operationId: string) {
     if (!supabase) throw new Error('Сохранение недоступно: Mini App не подключён к Supabase. Попробуйте позже.');
     const quantity = Number(draft.quantity);
-    const scheduleEntries = draft.schedules.map((schedule) => ({ id: makeId('schedule'), time: schedule.time, quantity: Number(schedule.quantity) }));
+    const scheduleEntries = draft.schedules.map((schedule, index) => ({ id: `${operationId}-schedule-${index + 1}`, time: schedule.time, quantity: Number(schedule.quantity) }));
     if (!draft.name.trim() || !draft.amount.trim() || !Number.isFinite(quantity) || quantity <= 0 || !scheduleEntries.length || scheduleEntries.some((schedule) => !Number.isFinite(schedule.quantity) || schedule.quantity <= 0 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(schedule.time))) { setMessage('Заполните данные препарата, упаковки и ежедневного приёма.'); return; }
     const stockUnit = ['Жидкость', 'Капли', 'Сироп'].includes(draft.form) ? 'мл' : 'шт.';
-    const medicationId = makeId('med');
-    const packageId = makeId('pack');
+    const medicationId = `${operationId}-medication`;
+    const packageId = `${operationId}-package`;
     await runTelegramMutation({ type: 'create_medication', medication_id: medicationId, package_id: packageId, name: draft.name.trim(), form: draft.form, amount: draft.amount.trim(), medication_unit: draft.unit, color: '#20A278', quantity, stock_unit: stockUnit, expires_on: draft.expiresOn || null, schedules: scheduleEntries, start_on: dateKey(today()) });
     setMedications((current) => [{ id: medicationId, name: draft.name.trim(), form: draft.form, amount: draft.amount.trim(), unit: draft.unit, color: '#20A278' }, ...current]);
     setPackages((current) => [{ id: packageId, medication_id: medicationId, quantity_remaining: quantity, unit: stockUnit, expires_on: draft.expiresOn || null }, ...current]);
@@ -137,12 +139,11 @@ export function App() {
     showNotice('Препарат добавлен в аптечку.');
     void loadData(selectedDate, false);
   }
-  async function addPackage(medication: Medication, quantityText: string, expiresOn: string) {
+  async function addPackage(medication: Medication, quantityText: string, expiresOn: string, packageId: string) {
     if (!supabase) throw new Error('Сохранение недоступно: Mini App не подключён к Supabase. Попробуйте позже.');
     const quantity = Number(quantityText);
     if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('Укажите количество в упаковке.');
     const unit = ['Жидкость', 'Капли', 'Сироп'].includes(medication.form) ? 'мл' : 'шт.';
-    const packageId = makeId('pack');
     await runTelegramMutation({ type: 'add_package', medication_id: medication.id, package_id: packageId, quantity, stock_unit: unit, expires_on: expiresOn || null });
     setPackages((current) => [{ id: packageId, medication_id: medication.id, quantity_remaining: quantity, unit, expires_on: expiresOn || null }, ...current]);
     setPackageMedication(null);
@@ -153,7 +154,7 @@ export function App() {
   const title = tab === 'doses' ? 'Приёмы' : tab === 'cabinet' ? 'Аптечка' : 'LifeTab';
   const eyebrow = tab === 'doses' ? 'СЕГОДНЯ' : tab === 'cabinet' ? 'ДОМАШНЯЯ АПТЕЧКА' : 'LIFECARE DEVICE';
   return <main className={`app-shell app-shell--${tab}`}>
-    <header className="header"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1></div>{tab !== 'lifetab' ? <button className="round-button" onClick={tab === 'cabinet' ? () => setShowAddMedication(true) : () => void loadData()} aria-label={tab === 'cabinet' ? 'Добавить препарат' : 'Обновить данные'}>{tab === 'cabinet' ? '+' : '↻'}</button> : <span className="preorder"><i />ПРЕДЗАКАЗ</span>}</header>
+    <header className="header"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1></div>{tab !== 'lifetab' ? <button className="round-button" disabled={refreshing} onClick={tab === 'cabinet' ? () => setShowAddMedication(true) : () => void refreshData()} aria-label={tab === 'cabinet' ? 'Добавить препарат' : 'Обновить данные'}>{tab === 'cabinet' ? '+' : refreshing ? '…' : '↻'}</button> : <span className="preorder"><i />ПРЕДЗАКАЗ</span>}</header>
     {message ? <div className="message" role="alert">{message}</div> : null}
     {notice ? <div className="notice" role="status">{notice}</div> : null}
     {loading ? <div className="loading"><span className="loader" />Загружаем данные…</div> : tab === 'doses' ? <Doses doses={doses} medicationById={medicationById} selectedDate={selectedDate} updatingDoseId={updatingDoseId} onSelectDate={chooseDate} onMark={markDose} /> : tab === 'cabinet' ? <Cabinet medications={medications} packagesByMedication={packagesByMedication} onAdd={() => setShowAddMedication(true)} onAddPackage={setPackageMedication} onOpen={setDetailMedication} /> : <LifeTab />}
@@ -186,11 +187,12 @@ function DoseRow({ dose, medication, canMark, isUpdating, onMark }: { dose: Dose
 function Cabinet({ medications, packagesByMedication, onAdd, onAddPackage, onOpen }: { medications: Medication[]; packagesByMedication: Map<string, Package[]>; onAdd: () => void; onAddPackage: (medication: Medication) => void; onOpen: (medication: Medication) => void }) { const currentDate = dateKey(today()); return <section className="cabinet-screen"><p className="medication-count">Препараты · {medications.length}</p>{medications.length ? medications.map((medication) => { const packs = packagesByMedication.get(medication.id) ?? []; const available = packs.filter((item) => !item.expires_on || item.expires_on >= currentDate); const stock = available.reduce((total, item) => total + Number(item.quantity_remaining), 0); const nextExpiry = available.filter((item) => item.expires_on).map((item) => item.expires_on!).sort()[0]; const expiredCount = packs.filter((item) => item.expires_on && item.expires_on < currentDate && Number(item.quantity_remaining) > 0).length; return <article key={medication.id} className="cabinet-card"><span className="med-icon" style={{ background: medication.color }}>◉</span><div><h2>{medication.name}</h2><p>{medication.form} · {medication.amount} {medication.unit}</p><strong>В запасе: {stock} {packs[0]?.unit ?? 'шт.'}</strong>{nextExpiry ? <small>Ближайший срок: {new Date(`${nextExpiry}T12:00:00`).toLocaleDateString('ru-RU')}</small> : null}{expiredCount ? <small className="expired-note">Просрочено упаковок: {expiredCount}</small> : null}<div className="cabinet-actions"><button onClick={() => onOpen(medication)}>Открыть карточку ›</button><button onClick={() => onAddPackage(medication)}>＋ Упаковка</button></div></div></article>; }) : <div className="empty"><div className="empty-icon">＋</div><h2>Аптечка пуста</h2><p>Добавьте первую упаковку — она сохранится в цифровой аптечке.</p><button className="primary-button" onClick={onAdd}>Добавить препарат</button></div>}</section>; }
 function LifeTab() { return <section className="lifetab-screen"><div className="device-hero"><div className="device-shadow" /><div className="device"><i>◖</i></div></div><div className="lifetab-price"><span><p>СПЕЦИАЛЬНАЯ ЦЕНА ПРЕДЗАКАЗА</p><strong>от 4 990 ₽</strong></span><small>Первая партия<br />в 2026 году</small></div><button className="lifetab-cta" onClick={() => window.location.assign('lifecare://')}>Открыть приложение <b>→</b></button><p className="lifetab-note">Управление устройством доступно в нативном LifeCare</p><h2>Как LifeTab помогает</h2><div className="feature-list"><div><span>◷</span><p><strong>Напоминает о приёмах</strong><small>Помогает не пропускать важные дозы</small></p></div><div><span>◉</span><p><strong>Синхронизируется с аптечкой</strong><small>Отслеживает запас препаратов</small></p></div></div></section>; }
 
-function AddMedication({ onClose, onSubmit }: { onClose: () => void; onSubmit: (draft: MedicationDraft) => Promise<void> }) {
+function AddMedication({ onClose, onSubmit }: { onClose: () => void; onSubmit: (draft: MedicationDraft, operationId: string) => Promise<void> }) {
   const [screen, setScreen] = useState<'choice' | 1 | 2 | 3>('choice');
   const [draft, setDraft] = useState<MedicationDraft>(blankDraft);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const operationId = useRef(makeId('create-medication')).current;
   const patch = (values: Partial<MedicationDraft>) => setDraft((current) => ({ ...current, ...values }));
   const validDetails = Boolean(draft.name.trim() && draft.amount.trim());
   const validStock = Number(draft.quantity) > 0;
@@ -203,7 +205,7 @@ function AddMedication({ onClose, onSubmit }: { onClose: () => void; onSubmit: (
     if (screen === 3) {
       if (saving) return;
       setSaving(true);
-      void onSubmit(draft).catch((error: unknown) => {
+      void onSubmit(draft, operationId).catch((error: unknown) => {
         setValidationMessage(error instanceof Error ? error.message : 'Не удалось сохранить препарат. Попробуйте ещё раз.');
       }).finally(() => setSaving(false));
     }
@@ -215,18 +217,19 @@ function AddMedication({ onClose, onSubmit }: { onClose: () => void; onSubmit: (
   const removeSchedule = (index: number) => patch({ schedules: draft.schedules.filter((_, current) => current !== index) });
   return <div className="modal-backdrop"><section className="flow-sheet"><header className="flow-header"><button className="close" disabled={saving} onClick={screen === 1 ? onClose : () => setScreen(screen === 3 ? 2 : 1)}>{screen === 1 ? '×' : '‹'}</button><b>{screen} из 3</b><span /></header><div className="flow-progress"><i style={{ width: `${Number(screen) * 33.333}%` }} /></div><div className="medicine-orb">◉</div>{screen === 1 ? <><h2>Препарат</h2><p>Запишите название и силу препарата так, как указано на упаковке.</p><label>Название<input value={draft.name} onChange={(event) => { patch({ name: event.target.value }); setValidationMessage(null); }} placeholder="Например, Ибупрофен" autoFocus /></label><label>Сила препарата<input value={draft.amount} onChange={(event) => { patch({ amount: event.target.value }); setValidationMessage(null); }} inputMode="decimal" placeholder="Например, 400" /></label><div className="compact-fields"><label>Форма<select value={draft.form} onChange={(event) => patch({ form: event.target.value })}><option>Таблетка</option><option>Капсула</option><option>Капли</option><option>Сироп</option><option>Инъекция</option><option>Мазь</option><option>Спрей</option><option>Порошок</option><option>Жидкость</option></select></label><label>Единица<select value={draft.unit} onChange={(event) => patch({ unit: event.target.value })}><option>мг</option><option>мкг</option><option>г</option><option>мл</option></select></label></div></> : screen === 2 ? <><h2>Запас и приём</h2><p>Укажите остаток и ежедневные приёмы. Расписание можно дополнить несколькими временами в день.</p><label>Количество в упаковке, {stockUnit}<input value={draft.quantity} onChange={(event) => { patch({ quantity: event.target.value }); setValidationMessage(null); }} inputMode="decimal" placeholder="Например, 20" autoFocus /></label><label>Срок годности · необязательно<input value={draft.expiresOn} onChange={(event) => patch({ expiresOn: event.target.value })} type="date" min={dateKey(today())} /></label><p className="section-caption">ЕЖЕДНЕВНЫЕ ПРИЁМЫ</p><div className="schedule-fields">{draft.schedules.map((schedule, index) => <div className="schedule-row" key={`${schedule.time}-${index}`}><div className="compact-fields"><label>Время<input type="time" value={schedule.time} onChange={(event) => { updateSchedule(index, { time: event.target.value }); setValidationMessage(null); }} /></label><label>Количество, {stockUnit}<input value={schedule.quantity} onChange={(event) => { updateSchedule(index, { quantity: event.target.value }); setValidationMessage(null); }} inputMode="decimal" placeholder="Например, 1" /></label></div>{draft.schedules.length > 1 ? <button className="remove-schedule" type="button" onClick={() => removeSchedule(index)}>Убрать этот приём</button> : null}</div>)}</div><button className="secondary-button" type="button" onClick={addSchedule}>＋ Добавить время приёма</button></> : <><h2>Проверьте детали</h2><p>Проверьте ключевые данные перед сохранением.</p><article className="review-card"><strong>{draft.name}</strong><p>{draft.form} · {draft.amount} {draft.unit}</p><hr /><small>ПРИЁМ</small>{draft.schedules.map((schedule, index) => <p key={`${schedule.time}-${index}`}>Каждый день · {schedule.time} · {schedule.quantity} {stockUnit}</p>)}<small>АПТЕЧКА</small><p>{draft.quantity} {stockUnit}{draft.expiresOn ? ` · до ${new Date(`${draft.expiresOn}T12:00:00`).toLocaleDateString('ru-RU')}` : ''}</p></article></>}{validationMessage ? <p className="flow-validation" role="alert">{validationMessage}</p> : null}</section><footer className="flow-footer"><button className="primary-button" disabled={saving} onClick={proceed}>{saving ? 'Сохраняем…' : screen === 3 ? 'Добавить лекарство' : 'Далее'}</button></footer></div>;
 }
-function AddPackage({ medication, onClose, onSubmit }: { medication: Medication; onClose: () => void; onSubmit: (medication: Medication, quantity: string, expiresOn: string) => Promise<void> }) {
+function AddPackage({ medication, onClose, onSubmit }: { medication: Medication; onClose: () => void; onSubmit: (medication: Medication, quantity: string, expiresOn: string, packageId: string) => Promise<void> }) {
   const [quantity, setQuantity] = useState('');
   const [expiresOn, setExpiresOn] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const packageId = useRef(makeId('pack')).current;
   const unit = ['Жидкость', 'Капли', 'Сироп'].includes(medication.form) ? 'мл' : 'шт.';
   const save = () => {
     if (saving) return;
     setSaving(true); setError(null);
-    void onSubmit(medication, quantity, expiresOn).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Не удалось добавить упаковку.')).finally(() => setSaving(false));
+    void onSubmit(medication, quantity, expiresOn, packageId).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Не удалось добавить упаковку.')).finally(() => setSaving(false));
   };
-  return <div className="modal-backdrop"><section className="package-sheet"><div className="modal-handle" /><button className="close package-close" disabled={saving} onClick={onClose}>×</button><h2>Новая упаковка</h2><p>{medication.name}. Она будет учитываться отдельно по сроку годности.</p><label>Количество, {unit}<input value={quantity} onChange={(event) => { setQuantity(event.target.value); setError(null); }} inputMode="decimal" placeholder="Например, 20" autoFocus /></label><label>Срок годности · необязательно<input value={expiresOn} onChange={(event) => { setExpiresOn(event.target.value); setError(null); }} type="date" /></label>{error ? <p className="flow-validation" role="alert">{error}</p> : null}<button className="primary-button" disabled={saving} onClick={save}>{saving ? 'Добавляем…' : 'Добавить упаковку'}</button></section></div>;
+  return <div className="modal-backdrop"><section className="package-sheet"><div className="modal-handle" /><button className="close package-close" disabled={saving} onClick={onClose}>×</button><h2>Новая упаковка</h2><p>{medication.name}. Она будет учитываться отдельно по сроку годности.</p><label>Количество, {unit}<input value={quantity} onChange={(event) => { setQuantity(event.target.value); setError(null); }} inputMode="decimal" placeholder="Например, 20" autoFocus /></label><label>Срок годности · необязательно<input value={expiresOn} onChange={(event) => { setExpiresOn(event.target.value); setError(null); }} type="date" min={dateKey(today())} /></label>{error ? <p className="flow-validation" role="alert">{error}</p> : null}<button className="primary-button" disabled={saving} onClick={save}>{saving ? 'Добавляем…' : 'Добавить упаковку'}</button></section></div>;
 }
 function MedicationDetails({ medication, packages, schedules, onClose, onAddPackage }: { medication: Medication; packages: Package[]; schedules: MedicationSchedule[]; onClose: () => void; onAddPackage: () => void }) {
   const currentDate = dateKey(today());
