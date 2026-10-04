@@ -3,7 +3,7 @@ import postgres from 'npm:postgres@3.4.9';
 
 type TelegramUser = { id: number; first_name?: string; last_name?: string; username?: string; photo_url?: string };
 type Mutation =
-  | { type: 'create_medication'; medication_id: string; package_id: string; schedule_id: string; name: string; form: string; amount: string; medication_unit: string; color: string; quantity: number; stock_unit: string; expires_on: string | null; schedule_time: string; dose_quantity: number; start_on: string }
+  | { type: 'create_medication'; medication_id: string; package_id: string; name: string; form: string; amount: string; medication_unit: string; color: string; quantity: number; stock_unit: string; expires_on: string | null; schedules: Array<{ id: string; time: string; quantity: number }>; start_on: string }
   | { type: 'add_package'; medication_id: string; package_id: string; quantity: number; stock_unit: string; expires_on: string | null }
   | { type: 'complete_dose'; dose_id: string; status: 'taken' | 'skipped' };
 
@@ -134,9 +134,16 @@ function parseMutation(value: unknown): Mutation {
     const packageId = identifier(input.package_id, 'package_id');
     const stockUnit = nonEmpty(input.stock_unit, 'stock_unit');
     if (input.type === 'add_package') return { type: 'add_package', medication_id: medicationId, package_id: packageId, quantity, stock_unit: stockUnit, expires_on: expiresOn };
-    const doseQuantity = Number(input.dose_quantity);
-    if (!Number.isFinite(doseQuantity) || doseQuantity <= 0) throw new Error('invalid dose_quantity');
-    return { type: 'create_medication', medication_id: medicationId, package_id: packageId, schedule_id: identifier(input.schedule_id, 'schedule_id'), name: nonEmpty(input.name, 'name'), form: nonEmpty(input.form, 'form'), amount: nonEmpty(input.amount, 'amount'), medication_unit: nonEmpty(input.medication_unit, 'medication_unit'), color: nonEmpty(input.color, 'color'), quantity, stock_unit: stockUnit, expires_on: expiresOn, schedule_time: timeOnly(input.schedule_time, 'schedule_time'), dose_quantity: doseQuantity, start_on: dateOnly(input.start_on, 'start_on') };
+    if (!Array.isArray(input.schedules) || input.schedules.length === 0 || input.schedules.length > 8) throw new Error('invalid schedules');
+    const schedules = input.schedules.map((schedule, index) => {
+      if (!schedule || typeof schedule !== 'object') throw new Error('invalid schedule');
+      const value = schedule as Record<string, unknown>;
+      const doseQuantity = Number(value.quantity);
+      if (!Number.isFinite(doseQuantity) || doseQuantity <= 0) throw new Error(`invalid schedules[${index}].quantity`);
+      return { id: identifier(value.id, `schedules[${index}].id`), time: timeOnly(value.time, `schedules[${index}].time`), quantity: doseQuantity };
+    });
+    if (new Set(schedules.map((schedule) => schedule.id)).size !== schedules.length) throw new Error('duplicate schedule ids');
+    return { type: 'create_medication', medication_id: medicationId, package_id: packageId, name: nonEmpty(input.name, 'name'), form: nonEmpty(input.form, 'form'), amount: nonEmpty(input.amount, 'amount'), medication_unit: nonEmpty(input.medication_unit, 'medication_unit'), color: nonEmpty(input.color, 'color'), quantity, stock_unit: stockUnit, expires_on: expiresOn, schedules, start_on: dateOnly(input.start_on, 'start_on') };
   }
   if (input.type === 'complete_dose' && (input.status === 'taken' || input.status === 'skipped')) return { type: 'complete_dose', dose_id: identifier(input.dose_id, 'dose_id'), status: input.status };
   throw new Error('invalid mutation');
@@ -147,16 +154,18 @@ async function runMutation(sql: ReturnType<typeof postgres>, ownerId: string, mu
     await sql.begin(async (transaction) => {
       await transaction`insert into public.medications (id, owner_id, name, form, amount, unit, color, created_at) values (${mutation.medication_id}, ${ownerId}, ${mutation.name}, ${mutation.form}, ${mutation.amount}, ${mutation.medication_unit}, ${mutation.color}, now())`;
       await transaction`insert into public.medication_packages (id, owner_id, medication_id, quantity_initial, quantity_remaining, unit, expires_on, created_at) values (${mutation.package_id}, ${ownerId}, ${mutation.medication_id}, ${mutation.quantity}, ${mutation.quantity}, ${mutation.stock_unit}, ${mutation.expires_on}, now())`;
-      await transaction`insert into public.medication_schedules (id, owner_id, medication_id, kind, weekdays_json, scheduled_time, dose_quantity, dose_unit, start_on, interval_days, cycle_on_days, cycle_off_days, active, created_at) values (${mutation.schedule_id}, ${ownerId}, ${mutation.medication_id}, 'daily', ${JSON.stringify([0, 1, 2, 3, 4, 5, 6])}::jsonb, ${mutation.schedule_time}, ${mutation.dose_quantity}, ${mutation.stock_unit}, ${mutation.start_on}, 1, 1, 0, true, now())`;
-      await transaction`
-        insert into public.dose_events (id, owner_id, schedule_id, medication_id, scheduled_on, scheduled_time, quantity, unit, status, source, created_at)
-        select
-          ${mutation.schedule_id} || '-dose-' || to_char(day, 'YYYYMMDD'),
-          ${ownerId}, ${mutation.schedule_id}, ${mutation.medication_id}, day::date,
-          ${mutation.schedule_time}, ${mutation.dose_quantity}, ${mutation.stock_unit},
-          'pending', 'schedule', now()
-        from generate_series(${mutation.start_on}::date, ${mutation.start_on}::date + 365, interval '1 day') as days(day)
-        on conflict (id) do nothing`;
+      for (const schedule of mutation.schedules) {
+        await transaction`insert into public.medication_schedules (id, owner_id, medication_id, kind, weekdays_json, scheduled_time, dose_quantity, dose_unit, start_on, interval_days, cycle_on_days, cycle_off_days, active, created_at) values (${schedule.id}, ${ownerId}, ${mutation.medication_id}, 'daily', ${JSON.stringify([0, 1, 2, 3, 4, 5, 6])}::jsonb, ${schedule.time}, ${schedule.quantity}, ${mutation.stock_unit}, ${mutation.start_on}, 1, 1, 0, true, now())`;
+        await transaction`
+          insert into public.dose_events (id, owner_id, schedule_id, medication_id, scheduled_on, scheduled_time, quantity, unit, status, source, created_at)
+          select
+            ${schedule.id} || '-dose-' || to_char(day, 'YYYYMMDD'),
+            ${ownerId}, ${schedule.id}, ${mutation.medication_id}, day::date,
+            ${schedule.time}, ${schedule.quantity}, ${mutation.stock_unit},
+            'pending', 'schedule', now()
+          from generate_series(${mutation.start_on}::date, ${mutation.start_on}::date + 365, interval '1 day') as days(day)
+          on conflict (id) do nothing`;
+      }
     });
     return { status: 'created' };
   }
