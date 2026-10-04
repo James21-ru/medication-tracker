@@ -120,12 +120,6 @@ function timeOnly(value: unknown, field: string) {
   return result;
 }
 
-function dailyDates(startOn: string, count = 366) {
-  const [year, month, day] = startOn.split('-').map(Number);
-  const start = Date.UTC(year, month - 1, day);
-  return Array.from({ length: count }, (_, offset) => new Date(start + offset * 86_400_000).toISOString().slice(0, 10));
-}
-
 function parseMutation(value: unknown): Mutation {
   if (!value || typeof value !== 'object') throw new Error('invalid mutation');
   const input = value as Record<string, unknown>;
@@ -154,10 +148,15 @@ async function runMutation(sql: ReturnType<typeof postgres>, ownerId: string, mu
       await transaction`insert into public.medications (id, owner_id, name, form, amount, unit, color, created_at) values (${mutation.medication_id}, ${ownerId}, ${mutation.name}, ${mutation.form}, ${mutation.amount}, ${mutation.medication_unit}, ${mutation.color}, now())`;
       await transaction`insert into public.medication_packages (id, owner_id, medication_id, quantity_initial, quantity_remaining, unit, expires_on, created_at) values (${mutation.package_id}, ${ownerId}, ${mutation.medication_id}, ${mutation.quantity}, ${mutation.quantity}, ${mutation.stock_unit}, ${mutation.expires_on}, now())`;
       await transaction`insert into public.medication_schedules (id, owner_id, medication_id, kind, weekdays_json, scheduled_time, dose_quantity, dose_unit, start_on, interval_days, cycle_on_days, cycle_off_days, active, created_at) values (${mutation.schedule_id}, ${ownerId}, ${mutation.medication_id}, 'daily', ${JSON.stringify([0, 1, 2, 3, 4, 5, 6])}::jsonb, ${mutation.schedule_time}, ${mutation.dose_quantity}, ${mutation.stock_unit}, ${mutation.start_on}, 1, 1, 0, true, now())`;
-      for (const scheduledOn of dailyDates(mutation.start_on)) {
-        const eventId = `${mutation.schedule_id}-dose-${scheduledOn.replaceAll('-', '')}`;
-        await transaction`insert into public.dose_events (id, owner_id, schedule_id, medication_id, scheduled_on, scheduled_time, quantity, unit, status, source, created_at) values (${eventId}, ${ownerId}, ${mutation.schedule_id}, ${mutation.medication_id}, ${scheduledOn}, ${mutation.schedule_time}, ${mutation.dose_quantity}, ${mutation.stock_unit}, 'pending', 'schedule', now()) on conflict (id) do nothing`;
-      }
+      await transaction`
+        insert into public.dose_events (id, owner_id, schedule_id, medication_id, scheduled_on, scheduled_time, quantity, unit, status, source, created_at)
+        select
+          ${mutation.schedule_id} || '-dose-' || to_char(day, 'YYYYMMDD'),
+          ${ownerId}, ${mutation.schedule_id}, ${mutation.medication_id}, day::date,
+          ${mutation.schedule_time}, ${mutation.dose_quantity}, ${mutation.stock_unit},
+          'pending', 'schedule', now()
+        from generate_series(${mutation.start_on}::date, ${mutation.start_on}::date + 365, interval '1 day') as days(day)
+        on conflict (id) do nothing`;
     });
     return { status: 'created' };
   }
