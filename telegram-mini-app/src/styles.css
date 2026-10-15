@@ -48,8 +48,8 @@
 .tabbar {
   isolation: isolate;
   bottom: max(12px, env(safe-area-inset-bottom));
-  width: 118px;
-  min-height: 62px;
+  width: 188px;
+  min-height: 72px;
   padding: 5px;
   gap: 4px;
   justify-content: center;
@@ -71,27 +71,47 @@
 }
 .tab {
   position: relative;
-  flex: 0 0 52px;
-  width: 52px;
-  min-height: 52px;
-  padding: 0;
+  flex: 1;
+  width: auto;
+  min-height: 60px;
+  padding: 3px 0 2px;
   border: 1px solid transparent;
-  border-radius: 50%;
+  border-radius: 28px;
   color: #30353d;
-  font-size: 0;
+  font-size: 11px;
+  font-weight: 800;
   letter-spacing: -.1px;
   transition: color .18s ease, background-color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
-.tab span { height: auto; font-size: 25px; line-height: 1; }
+.tab span { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; font-size: 23px; line-height: 1; }
 .tab.active {
-  border-color: rgba(255, 255, 255, .74);
+  border-color: transparent;
   color: #087bf2;
-  background: linear-gradient(135deg, rgba(255, 255, 255, .78), rgba(211, 225, 239, .62));
-  box-shadow: 0 4px 13px rgba(70, 95, 124, .12), inset 0 1px 0 rgba(255, 255, 255, .88);
+  background: transparent;
+  box-shadow: none;
 }
+.tab.active span { border: 1px solid rgba(255, 255, 255, .82); background: linear-gradient(135deg, rgba(255, 255, 255, .86), rgba(211, 225, 239, .7)); box-shadow: 0 4px 13px rgba(70, 95, 124, .14), inset 0 1px 0 rgba(255, 255, 255, .9); }
 .tab:active { transform: scale(.97); }
 .tab:focus-visible { outline: 3px solid rgba(22, 136, 247, .42); outline-offset: -3px; }
 @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
   .tabbar { background: rgba(249, 250, 252, .98); }
-  .tab.active { background: #e5edf5; }
+  .tab.active span { background: #e5edf5; }
+}
+
+/* Desktop uses the available window without stretching individual controls beyond a readable size. */
+@media (min-width: 760px) {
+  body { background: #e8edf5; }
+  .app-shell { width: min(calc(100% - 64px), 1180px); padding: 38px 40px 118px; }
+  .header { margin: 4px 0 30px; }
+  .header h1 { font-size: clamp(40px, 4vw, 52px); }
+  .cabinet-screen { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+  .cabinet-screen > .medication-count, .cabinet-screen > .empty { grid-column: 1 / -1; }
+  .cabinet-card { min-height: 188px; padding: 24px; }
+  .doses-screen { grid-template-columns: minmax(300px, .9fr) minmax(340px, 1.1fr); align-items: start; gap: 18px 22px; }
+  .doses-screen .calendar { grid-column: 1 / -1; width: min(100%, 720px); justify-self: center; }
+  .doses-screen .next-dose, .doses-screen > .empty { grid-column: 1; }
+  .doses-screen .progress-card { grid-column: 2; grid-row: 2; }
+  .doses-screen > .section-caption { grid-column: 2; margin: 2px 0 -7px; }
+  .doses-screen .dose-list { grid-column: 2; }
+  .tabbar { bottom: 22px; }
 }
