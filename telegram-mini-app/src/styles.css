@@ -43,3 +43,51 @@
 .package-sheet { position: relative; display: grid; gap: 16px; width: min(100%, 560px); margin: 0 auto; padding: 14px 28px calc(27px + env(safe-area-inset-bottom)); border-radius: 34px 34px 0 0; background: #fff; } .package-sheet h2 { margin: 12px 0 0; font-size: 27px; } .package-sheet > p { margin: 0; color: #737b87; font-size: 15px; line-height: 1.45; } .package-sheet label { display: grid; gap: 8px; color: #272c35; font-size: 15px; font-weight: 800; } .package-sheet input { width: 100%; height: 56px; padding: 0 18px; border: 0; border-radius: 18px; outline-color: #1688f7; color: #1c2128; background: #f1f2f5; font-size: 17px; } .package-sheet .primary-button { width: 100%; margin-top: 6px; } .package-close { position: absolute; top: 33px; right: 28px; }
 .expired-note { color: #b45a5a !important; } .details-sheet { position: relative; width: min(100%, 560px); max-height: calc(100dvh - 16px); margin: 0 auto; padding: 14px 28px calc(27px + env(safe-area-inset-bottom)); overflow-y: auto; border-radius: 34px 34px 0 0; background: #fff; } .details-icon { width: 78px; height: 78px; margin: 10px auto 18px; font-size: 40px; } .details-sheet h2 { margin: 0; text-align: center; font-size: 28px; } .details-subtitle { margin: 5px 0 26px; color: #717986; text-align: center; } .details-section { margin-top: 22px; } .details-section h3 { margin: 0 0 10px; color: #20252d; font-size: 18px; } .details-section > strong { color: #218866; font-size: 16px; } .details-section > p, .details-empty { margin: 0; color: #717986; font-size: 14px; line-height: 1.45; } .package-list { display: grid; margin-top: 12px; border-radius: 19px; overflow: hidden; background: #f3f4f6; } .package-row { display: grid; gap: 4px; padding: 14px; border-bottom: 1px solid #e1e3e7; } .package-row:last-child { border-bottom: 0; } .package-row b { color: #303640; font-size: 14px; } .package-row span { color: #737b87; font-size: 13px; } .package-row.expired span { color: #b45a5a; } .details-sheet .primary-button { width: 100%; margin-top: 26px; } .details-close { position: absolute; top: 33px; right: 28px; }
 .review-section { display: block; width: 100%; padding: 0; text-align: left; color: inherit; background: transparent; } .review-section > small:last-child { display: block; margin-top: -12px; color: #1688f7; letter-spacing: 0; } .review-section:focus-visible { outline: 2px solid #1688f7; outline-offset: 6px; border-radius: 8px; }
+
+/* Two-tab iOS-style glass control bar with a solid fallback for older webviews. */
+.tabbar {
+  isolation: isolate;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  width: min(calc(100% - 28px), 528px);
+  min-height: 72px;
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, .72);
+  border-radius: 30px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, .68), rgba(236, 241, 247, .52));
+  box-shadow: 0 18px 42px rgba(38, 52, 73, .16), inset 0 1px 0 rgba(255, 255, 255, .84);
+  -webkit-backdrop-filter: saturate(180%) blur(28px);
+  backdrop-filter: saturate(180%) blur(28px);
+}
+.tabbar::before {
+  position: absolute;
+  z-index: -1;
+  inset: 1px;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .32), rgba(255, 255, 255, 0));
+  content: '';
+  pointer-events: none;
+}
+.tab {
+  position: relative;
+  min-height: 60px;
+  gap: 3px;
+  border: 1px solid transparent;
+  border-radius: 24px;
+  color: #30353d;
+  font-size: 12px;
+  letter-spacing: -.1px;
+  transition: color .18s ease, background-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.tab span { height: 22px; font-size: 23px; line-height: 19px; }
+.tab.active {
+  border-color: rgba(255, 255, 255, .74);
+  color: #087bf2;
+  background: linear-gradient(135deg, rgba(255, 255, 255, .78), rgba(211, 225, 239, .62));
+  box-shadow: 0 4px 13px rgba(70, 95, 124, .12), inset 0 1px 0 rgba(255, 255, 255, .88);
+}
+.tab:active { transform: scale(.97); }
+.tab:focus-visible { outline: 3px solid rgba(22, 136, 247, .42); outline-offset: -3px; }
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .tabbar { background: rgba(249, 250, 252, .98); }
+  .tab.active { background: #e5edf5; }
+}
