@@ -413,6 +413,7 @@ input:not([type="checkbox"]), select, textarea { font-size: 16px !important; }
 
 /* Figma TabBar: 366 × 68 in the reference 402 px frame. */
 .tabbar { bottom: max(16px, env(safe-area-inset-bottom)); width: min(calc(100% - 36px), 366px); min-height: 68px; padding: 5px; gap: 0; border-color: rgba(255,255,255,.9); border-radius: 24px; background: rgba(248,249,251,.88); box-shadow: 0 12px 35px rgba(33,42,54,.14); }
+.app-shell > .tabbar { position: fixed; z-index: 30; }
 .tab { min-height: 57px; gap: 4px; padding: 5px 0; border-radius: 19px; color: #6f737a; font-size: 11px; font-weight: 600; }
 .tab span { width: 21px; height: 21px; border: 0; background: transparent; box-shadow: none; font-size: 21px; }
 .tab.active { color: #1677ff; background: rgba(255,255,255,.84); box-shadow: 0 2px 10px rgba(20,26,35,.07); }
@@ -440,3 +441,44 @@ input:not([type="checkbox"]), select, textarea { font-size: 16px !important; }
 .cabinet-editor footer .secondary-button, .cabinet-editor footer .primary-button { min-height: 52px; border-radius: 17px; font-size: 15px; }
 .cabinet-editor footer .secondary-button { border: 0; color: #1677ff; background: #e9f2ff; }
 .cabinet-editor footer .primary-button { box-shadow: 0 10px 11px rgba(22,119,255,.2); }
+
+/* Today screen — mobile reference from the approved Figma states. */
+.app-shell--doses { padding-top: 0; }
+.doses-screen--figma { display: block; min-height: calc(100dvh - 128px); margin: 0 -18px; padding: 42px 30px 128px; background: #f3f4f6; }
+.doses-hero { display: flex; align-items: center; justify-content: space-between; }
+.doses-hero p { margin: 0; color: #1677ff; font-size: 12px; font-weight: 700; letter-spacing: 1.25px; }
+.doses-hero h1 { margin: 12px 0 7px; color: #111317; font-size: 40px; font-weight: 750; line-height: 42px; letter-spacing: -1.13px; }
+.doses-hero span { color: #70747c; font-size: 16px; line-height: 24px; }
+.doses-calendar-button { display: grid; place-items: center; width: 52px; height: 52px; margin-top: 15px; border: 1px solid rgba(17,19,23,.06); border-radius: 18px; color: #a2a6ad; background: rgba(255,255,255,.88); font-size: 25px; }
+.doses-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 42px; }
+.doses-week button { display: grid; justify-items: center; gap: 12px; padding: 0; color: #70747c; background: transparent; }
+.doses-week b { font-size: 12px; font-weight: 650; }
+.doses-week span { display: grid; place-items: center; width: 100%; max-width: 48px; aspect-ratio: 1; border: 2px solid #d9dbe0; border-radius: 50%; color: #111317; background: #fff; font-size: 19px; font-weight: 650; }
+.doses-week button.active b { color: #1677ff; }
+.doses-week button.active span { border-color: #111317; color: #fff; background: #111317; box-shadow: 0 0 0 4px rgba(17,19,23,.06); }
+.doses-progress { display: grid; grid-template-columns: 1fr auto; gap: 14px; margin-top: 56px; color: #70747c; font-size: 15px; }
+.doses-progress i { grid-column: 1 / -1; height: 8px; overflow: hidden; border-radius: 99px; background: #dfe1e5; }
+.doses-progress b { display: block; height: 100%; min-width: 0; border-radius: inherit; background: #1677ff; transition: width .2s ease; }
+.doses-list--figma { display: grid; gap: 24px; margin-top: 39px; }
+.doses-list--figma > section { display: grid; gap: 17px; }
+.doses-list--figma time { color: #1677ff; font-size: 25px; font-weight: 650; letter-spacing: -.55px; }
+.dose-card--figma { display: flex; align-items: center; gap: 14px; min-height: 152px; padding: 20px 22px; border-radius: 28px; background: #fff; box-shadow: 0 14px 28px rgba(39,49,65,.08); }
+.dose-card__icon { display: grid; place-items: center; flex: 0 0 72px; width: 72px; height: 72px; border-radius: 20px; color: #16a177; background: #e2f6ef; font-size: 36px; }
+.dose-card--figma > div { flex: 1; min-width: 0; }
+.dose-card--figma strong { display: block; overflow: hidden; color: #111317; text-overflow: ellipsis; white-space: nowrap; font-size: 21px; font-weight: 650; letter-spacing: -.6px; }
+.dose-card--figma p { margin: 6px 0 0; color: #70747c; font-size: 15px; }
+.dose-card--figma small { display: block; margin-top: 8px; color: #a2a6ad; font-size: 13px; }
+.dose-card--figma > button { display: grid; place-items: center; flex: 0 0 60px; width: 60px; height: 60px; border: 1px solid #bad8ff; border-radius: 50%; color: #1677ff; background: #e9f2ff; font-size: 27px; }
+.dose-card--done { opacity: .66; }
+.dose-card__status { color: #157d60; font-size: 12px; font-weight: 700; }
+.doses-empty--figma { display: grid; justify-items: center; max-width: 290px; margin: 100px auto 0; text-align: center; }
+.doses-empty--figma > span { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; color: #1677ff; background: #e2f2ff; font-size: 42px; }
+.doses-empty--figma h2 { margin: 26px 0 0; color: #111317; font-size: 25px; line-height: 1.15; letter-spacing: -.75px; }
+.doses-empty--figma p { margin: 12px 0 0; color: #8a929e; font-size: 15px; }
+@media (max-width: 360px) {
+  .doses-screen--figma { padding-right: 18px; padding-left: 18px; }
+  .doses-week { gap: 4px; }
+  .doses-week span { font-size: 17px; }
+  .dose-card--figma { padding: 17px; }
+  .dose-card__icon { flex-basis: 58px; width: 58px; height: 58px; }
+}
