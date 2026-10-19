@@ -289,3 +289,25 @@
 @media (min-width: 760px) {
   .medicine-flow { min-height: 600px; max-height: calc(100dvh - 56px); margin: auto; border-radius: 34px; }
 }
+
+/* Medication card actions: editing is reversible; deletion receives a dedicated confirmation. */
+.details-category { width: max-content; max-width: 100%; margin: -15px auto 3px; padding: 6px 10px; overflow: hidden; border-radius: 99px; color: #42715f; background: #e6f6ef; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 800; }
+.details-actions { display: grid; gap: 10px; margin-top: 26px; }
+.details-actions .primary-button, .details-actions .secondary-button, .details-delete { width: 100%; margin: 0; }
+.details-delete { min-height: 49px; color: #bd4d62; background: transparent; font-size: 14px; font-weight: 800; }
+.medication-editor, .delete-confirm { display: flex; flex-direction: column; width: min(100%, 560px); max-height: calc(100dvh - 12px); margin: 12px auto 0; padding: 14px 28px calc(22px + env(safe-area-inset-bottom)); overflow-y: auto; border-radius: 34px 34px 0 0; background: #fff; }
+.medication-editor { gap: 15px; }
+.medication-editor h2, .delete-confirm h2 { margin: 3px 0 6px; color: #20252d; font-size: 30px; letter-spacing: -1px; }
+.medication-editor label { display: grid; gap: 8px; color: #303741; font-size: 14px; font-weight: 800; }
+.medication-editor input, .medication-editor select, .medication-editor textarea { box-sizing: border-box; width: 100%; border: 1px solid #d7dee7; border-radius: 17px; outline-color: #1688f7; color: #202731; background: #fff; font: inherit; }
+.medication-editor input, .medication-editor select { height: 54px; padding: 0 15px; }
+.medication-editor textarea { min-height: 108px; padding: 14px 15px; resize: vertical; line-height: 1.4; }
+.editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.medication-editor .purchase-toggle { margin: -2px 0 0; }
+.medication-editor footer { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+.medication-editor footer .secondary-button, .medication-editor footer .primary-button { min-height: 54px; margin: 0; }
+.delete-confirm { gap: 17px; max-width: 460px; padding-top: 25px; }
+.delete-confirm > p { margin: 0 0 7px; color: #687381; font-size: 15px; line-height: 1.5; }
+.delete-confirm__action { min-height: 56px; border-radius: 18px; color: #fff; background: #c84f64; font-size: 16px; font-weight: 800; }
+.delete-confirm .secondary-button { min-height: 54px; margin: 0; }
+@media (min-width: 760px) { .medication-editor, .delete-confirm { margin: auto; border-radius: 34px; } }
