@@ -293,6 +293,7 @@
 /* Medication card actions: editing is reversible; deletion receives a dedicated confirmation. */
 .details-category { width: max-content; max-width: 100%; margin: -15px auto 3px; padding: 6px 10px; overflow: hidden; border-radius: 99px; color: #42715f; background: #e6f6ef; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 800; }
 .details-actions { display: grid; gap: 10px; margin-top: 26px; }
+.details-actions > .secondary-button:nth-child(2) { display: none; }
 .details-actions .primary-button, .details-actions .secondary-button, .details-delete { width: 100%; margin: 0; }
 .details-delete { min-height: 49px; color: #bd4d62; background: transparent; font-size: 14px; font-weight: 800; }
 .medication-editor, .delete-confirm { display: flex; flex-direction: column; width: min(100%, 560px); max-height: calc(100dvh - 12px); margin: 12px auto 0; padding: 14px 28px calc(22px + env(safe-area-inset-bottom)); overflow-y: auto; border-radius: 34px 34px 0 0; background: #fff; }
@@ -326,3 +327,12 @@
 .order-summary strong { font-size: 20px; } .order-summary span { color: #66717d; font-size: 14px; } .order-summary b { color: #27303a; font-size: 15px; } .order-summary small { color: #278065; font-size: 13px; font-weight: 800; } .order-summary hr { width: 100%; margin: 7px 0; border: 0; border-top: 1px solid #dbe1e7; }
 .pharmacy-sheet > .primary-button, .pharmacy-sheet > .secondary-button { width: 100%; margin: 0; }
 @media (min-width: 760px) { .pharmacy-sheet { margin: auto; border-radius: 34px; } }
+
+/* Separate current stock from medications whose remaining packages have expired. */
+.inventory-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 4px; border-radius: 17px; background: #eceff3; }
+.inventory-tabs button { min-height: 43px; padding: 0 9px; border-radius: 13px; color: #67717e; background: transparent; font-size: 13px; font-weight: 800; }
+.inventory-tabs button.active { color: #1688f7; background: #fff; box-shadow: 0 2px 8px rgba(49, 63, 82, .09); }
+.inventory-tabs button.active.expired { color: #bb5161; }
+.cabinet-card--expired { border: 1px solid #f0d9dc; background: #fffafb; }
+.cabinet-card--expired .expired-note { margin-top: 14px; font-size: 15px; }
+.inventory-empty { min-height: 280px; }
