@@ -136,7 +136,6 @@ export function App() {
       }
       setMessage(null);
       showNotice(completedStatus === 'taken' ? 'Приём отмечен: принято.' : 'Приём отмечен: пропущено.');
-      void loadData(selectedDate, false);
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Не удалось обновить приём. Попробуйте ещё раз.'); }
     finally { updatingDoseIds.current.delete(dose.id); setUpdatingDoseId((current) => current === dose.id ? null : current); }
   }
@@ -156,18 +155,17 @@ export function App() {
     if (dateKey(selectedDate) === dateKey(today())) setDoses((current) => [...current, ...scheduleEntries.map((schedule) => ({ id: `${schedule.id}-dose-${dateKey(today()).replaceAll('-', '')}`, medication_id: medicationId, scheduled_time: schedule.time, quantity: schedule.quantity, unit: stockUnit, status: 'pending' as const }))].sort((left, right) => left.scheduled_time.localeCompare(right.scheduled_time)));
     setShowAddMedication(false);
     showNotice('Препарат добавлен в аптечку.');
-    void loadData(selectedDate, false);
   }
   async function addPackage(medication: Medication, quantityText: string, expiresOn: string, packageId: string) {
     if (!supabase) throw new Error('Сохранение недоступно: Mini App не подключён к Supabase. Попробуйте позже.');
     const quantity = Number(quantityText);
     if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('Укажите количество в упаковке.');
     const unit = ['Жидкость', 'Капли', 'Сироп'].includes(medication.form) ? 'мл' : 'шт.';
-    await runTelegramMutation({ type: 'add_package', medication_id: medication.id, package_id: packageId, quantity, stock_unit: unit, expires_on: expiresOn || null });
+    const { error } = await supabase.from('medication_packages').insert({ id: packageId, medication_id: medication.id, quantity_initial: quantity, quantity_remaining: quantity, unit, expires_on: expiresOn || null, created_at: new Date().toISOString() });
+    if (error) throw new Error('Не удалось добавить упаковку. Попробуйте ещё раз.');
     setPackages((current) => [{ id: packageId, medication_id: medication.id, quantity_remaining: quantity, unit, expires_on: expiresOn || null }, ...current]);
     setPackageMedication(null);
     showNotice('Упаковка добавлена в аптечку.');
-    void loadData(selectedDate, false);
   }
 
   async function saveCabinet(name: string) {

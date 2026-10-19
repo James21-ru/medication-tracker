@@ -88,6 +88,11 @@ async function ensureTelegramAccount(client: ReturnType<typeof createClient>, sq
   return { email, userId };
 }
 
+async function telegramAccountId(sql: ReturnType<typeof postgres>, telegramUserId: number) {
+  const accounts = await sql<{ user_id: string }[]>`select user_id from mobile_auth.telegram_accounts where telegram_user_id = ${telegramUserId}`;
+  return accounts[0]?.user_id ?? null;
+}
+
 async function issueLoginToken(client: ReturnType<typeof createClient>, sql: ReturnType<typeof postgres>, user: TelegramUser) {
   const account = await ensureTelegramAccount(client, sql, user);
   const { data, error } = await client.auth.admin.generateLink({ type: 'magiclink', email: account.email });
@@ -181,7 +186,7 @@ async function runMutation(sql: ReturnType<typeof postgres>, ownerId: string, mu
             ${ownerId}, ${schedule.id}, ${mutation.medication_id}, day::date,
             ${schedule.time}, ${schedule.quantity}, ${mutation.stock_unit},
             'pending', 'schedule', now()
-          from generate_series(${mutation.start_on}::date, ${mutation.start_on}::date + 365, interval '1 day') as days(day)
+          from generate_series(${mutation.start_on}::date, ${mutation.start_on}::date + 42, interval '1 day') as days(day)
           on conflict (id) do nothing`;
       }
     });
@@ -235,8 +240,11 @@ Deno.serve(async (request) => {
     const supabase = createClient(requiredEnv('SUPABASE_URL'), serviceKey(), { auth: { autoRefreshToken: false, persistSession: false } });
     sql = postgres(Deno.env.get('LIFECARE_DB_URL') ?? requiredEnv('SUPABASE_DB_URL'), { prepare: false, max: 1, idle_timeout: 20 });
     if (body.mutation) {
-      const account = await ensureTelegramAccount(supabase, sql, user);
-      const result = await runMutation(sql, account.userId, parseMutation(body.mutation));
+      // Mutations do not need to update Auth metadata or mint a login link.
+      // The account is created during first sign-in; this keeps everyday taps
+      // to a single account lookup plus the requested database transaction.
+      const ownerId = await telegramAccountId(sql, user.id) ?? (await ensureTelegramAccount(supabase, sql, user)).userId;
+      const result = await runMutation(sql, ownerId, parseMutation(body.mutation));
       return new Response(JSON.stringify(result), { headers: corsHeaders });
     }
     const session = await issueLoginToken(supabase, sql, user);
