@@ -15,6 +15,20 @@ const dateKey = (date: Date) => new Intl.DateTimeFormat('en-CA').format(date);
 const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const blankDraft: MedicationDraft = { name: '', category: '', customCategory: '', form: 'Таблетка', amount: '', unit: 'мг', quantity: '', expiresOn: '', note: '', purchaseReminder: false, schedules: [] };
 const medicationDescription = (medication: Medication) => medication.amount ? `${medication.form} · ${medication.amount} ${medication.unit}` : medication.form;
+const formatExpirationInput = (value: string) => {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join('.');
+};
+const expirationDateKey = (value: string) => {
+  if (!value) return null;
+  const match = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(value);
+  if (!match) return null;
+  const [, dayText, monthText, yearText] = match;
+  const day = Number(dayText), month = Number(monthText), year = Number(yearText);
+  const candidate = new Date(year, month - 1, day);
+  if (candidate.getFullYear() !== year || candidate.getMonth() !== month - 1 || candidate.getDate() !== day) return null;
+  return `${yearText}-${monthText}-${dayText}`;
+};
 const localStorageKey = 'lifecare-mini-app-data-v2';
 const emptyLocalData = (): LocalData => ({ cabinets: [{ id: 'cabinet-home', name: 'Домашняя аптечка' }], medications: [], packages: [], doses: [], schedules: [] });
 function readLocalData(): LocalData { try { const value = window.localStorage.getItem(localStorageKey); if (!value) return emptyLocalData(); const parsed = JSON.parse(value) as Partial<LocalData>; if (!Array.isArray(parsed.cabinets) || !Array.isArray(parsed.medications) || !Array.isArray(parsed.packages) || !Array.isArray(parsed.doses) || !Array.isArray(parsed.schedules)) return emptyLocalData(); return { cabinets: parsed.cabinets, medications: parsed.medications, packages: parsed.packages, doses: parsed.doses, schedules: parsed.schedules }; } catch { return emptyLocalData(); } }
@@ -87,7 +101,7 @@ export function App() {
     const medicationId = `${operationId}-medication`;
     const packageId = `${operationId}-package`;
     setMedications((current) => [{ id: medicationId, cabinet_id: selectedCabinetId, name: draft.name.trim(), category: draft.category === 'Своя категория' ? draft.customCategory.trim() : draft.category, form: draft.form, amount: draft.amount.trim(), unit: draft.unit, note: draft.note.trim(), purchase_reminder: draft.purchaseReminder, color: '#20A278' }, ...current]);
-    setPackages((current) => [{ id: packageId, medication_id: medicationId, quantity_remaining: quantity, unit: stockUnit, expires_on: draft.expiresOn || null }, ...current]);
+    setPackages((current) => [{ id: packageId, medication_id: medicationId, quantity_remaining: quantity, unit: stockUnit, expires_on: expirationDateKey(draft.expiresOn) }, ...current]);
     setSchedules((current) => [...scheduleEntries.map((schedule) => ({ id: schedule.id, medication_id: medicationId, scheduled_time: schedule.time, dose_quantity: schedule.quantity, dose_unit: stockUnit })), ...current]);
     if (dateKey(selectedDate) === dateKey(today())) setDoses((current) => [...current, ...scheduleEntries.map((schedule) => ({ id: `${schedule.id}-dose-${dateKey(today()).replaceAll('-', '')}`, medication_id: medicationId, scheduled_time: schedule.time, quantity: schedule.quantity, unit: stockUnit, status: 'pending' as const }))].sort((left, right) => left.scheduled_time.localeCompare(right.scheduled_time)));
     setShowAddMedication(false);
@@ -97,7 +111,9 @@ export function App() {
     const quantity = Number(quantityText);
     if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('Укажите количество в упаковке.');
     const unit = ['Жидкость', 'Капли', 'Сироп'].includes(medication.form) ? 'мл' : 'шт.';
-    setPackages((current) => [{ id: packageId, medication_id: medication.id, quantity_remaining: quantity, unit, expires_on: expiresOn || null }, ...current]);
+    const expiration = expirationDateKey(expiresOn);
+    if (expiresOn && !expiration) throw new Error('Укажите существующую дату в формате ДД.ММ.ГГГГ.');
+    setPackages((current) => [{ id: packageId, medication_id: medication.id, quantity_remaining: quantity, unit, expires_on: expiration }, ...current]);
     setPackageMedication(null);
     showNotice('Упаковка добавлена в аптечку.');
   }
@@ -183,19 +199,31 @@ function AddMedication({ onClose, onSubmit }: { onClose: () => void; onSubmit: (
     if (screen === 2 && (!draft.category || (draft.category === 'Своя категория' && !draft.customCategory.trim()))) { setValidationMessage('Выберите категорию или укажите свою.'); return; }
     if (screen === 3 && !draft.form) { setValidationMessage('Выберите лекарственную форму.'); return; }
     if (screen === 5 && !validStock) { setValidationMessage('Укажите количество препарата в наличии.'); return; }
+    if (screen === 5 && draft.expiresOn && !expirationDateKey(draft.expiresOn)) { setValidationMessage('Укажите существующую дату в формате ДД.ММ.ГГГГ.'); return; }
     setValidationMessage(null);
-    if (screen === 6) {
-      if (saving) return;
-      setSaving(true);
-      void onSubmit(draft, operationId).catch((error: unknown) => {
-        setValidationMessage(error instanceof Error ? error.message : 'Не удалось сохранить препарат. Попробуйте ещё раз.');
-      }).finally(() => setSaving(false));
-    }
-    else setScreen((screen + 1) as 1 | 2 | 3 | 4 | 5 | 6);
+    if (screen !== 6) { setScreen((screen + 1) as 1 | 2 | 3 | 4 | 5 | 6); return; }
+    if (saving) return;
+    setSaving(true);
+    void onSubmit(draft, operationId).catch((error: unknown) => {
+      setValidationMessage(error instanceof Error ? error.message : 'Не удалось сохранить препарат. Попробуйте ещё раз.');
+    }).finally(() => setSaving(false));
   };
   const goBack = () => screen === 1 ? onClose() : setScreen((screen - 1) as 1 | 2 | 3 | 4 | 5 | 6);
   const select = (field: 'category' | 'form' | 'unit', value: string) => { patch({ [field]: value } as Partial<MedicationDraft>); setValidationMessage(null); };
-  return <div className="modal-backdrop"><section className="medicine-flow"><header className="medicine-flow__header"><button className="close" disabled={saving} onClick={goBack} aria-label={screen === 1 ? 'Закрыть' : 'Назад'}>{screen === 1 ? '×' : '‹'}</button><b>{screen} из 6</b>{screen === 6 ? <button className="close" disabled={saving} onClick={onClose} aria-label="Закрыть">×</button> : <span />}</header><div className="medicine-flow__content">{screen === 1 ? <><h2>Название лекарства</h2><label>Название лекарства<input value={draft.name} onChange={(event) => { patch({ name: event.target.value }); setValidationMessage(null); }} placeholder="Например, Ибупрофен" autoFocus /></label></> : screen === 2 ? <><h2>Категория лекарства</h2><div className="medicine-choice-list">{categories.map((category) => <button className={draft.category === category ? 'selected' : ''} key={category} onClick={() => select('category', category)}>{category}</button>)}</div>{draft.category === 'Своя категория' ? <label>Своя категория<input value={draft.customCategory} onChange={(event) => { patch({ customCategory: event.target.value }); setValidationMessage(null); }} placeholder="Например, Для поездки" autoFocus /></label> : null}</> : screen === 3 ? <><h2>Выберите лекарственную форму</h2><p className="medicine-flow__hint">Основные лекарственные формы</p><div className="medicine-choice-list">{mainForms.map((form) => <button className={draft.form === form ? 'selected' : ''} key={form} onClick={() => select('form', form)}>{form}</button>)}</div><p className="medicine-flow__hint">Другие формы</p><div className="medicine-choice-list">{otherForms.map((form) => <button className={draft.form === form ? 'selected' : ''} key={form} onClick={() => select('form', form)}>{form}</button>)}</div></> : screen === 4 ? <><h2>Добавление дозировки лекарства</h2><label>Дозировка<input value={draft.amount} onChange={(event) => patch({ amount: event.target.value })} inputMode="decimal" placeholder="Например, 400" autoFocus /></label><p className="medicine-flow__hint">Единицы измерения</p><div className="medicine-choice-list medicine-choice-list--units">{['мг', 'мкг', 'г', 'мл', '%'].map((unit) => <button className={draft.unit === unit ? 'selected' : ''} key={unit} onClick={() => select('unit', unit)}>{unit}</button>)}</div></> : screen === 5 ? <><h2>Запас препарата</h2><p className="medicine-flow__description">Укажите, сколько препарата сейчас в наличии.</p><label>Количество, {stockUnit}<input value={draft.quantity} onChange={(event) => { patch({ quantity: event.target.value }); setValidationMessage(null); }} inputMode="decimal" placeholder="Например, 20" autoFocus /></label><label>Срок годности <span>необязательно</span><input value={draft.expiresOn} onChange={(event) => patch({ expiresOn: event.target.value })} type="date" min={dateKey(today())} /></label></> : <><h2>{draft.name || 'Лекарство'}</h2><p className="medicine-flow__description">{medicationDescription({ id: '', cabinet_id: '', name: '', form: draft.form, amount: draft.amount, unit: draft.unit, color: '' })}</p><label>Комментарий к приёму<textarea value={draft.note} onChange={(event) => patch({ note: event.target.value })} placeholder="Например, после еды" /></label><label className="purchase-toggle"><span>Напомнить о покупке</span><input type="checkbox" checked={draft.purchaseReminder} onChange={(event) => patch({ purchaseReminder: event.target.checked })} /></label></>}{validationMessage ? <p className="flow-validation" role="alert">{validationMessage}</p> : null}</div><footer className="medicine-flow__footer"><button className="primary-button" disabled={saving} onClick={proceed}>{saving ? 'Сохраняем…' : screen === 6 ? 'Готово' : 'Далее'}</button>{screen === 4 ? <button className="medicine-skip" type="button" onClick={proceed}>Пропустить</button> : null}</footer></section></div>;
+  const title = draft.name || 'Лекарство';
+  return <div className="modal-backdrop"><section className="medicine-flow" role="dialog" aria-modal="true" aria-labelledby="medicine-flow-title">
+    <header className="medicine-flow__header"><button className="close" disabled={saving} onClick={goBack} aria-label={screen === 1 ? 'Закрыть' : 'Назад'}>{screen === 1 ? '×' : '‹'}</button><b>{screen} из 6</b>{screen === 6 ? <button className="close" disabled={saving} onClick={onClose} aria-label="Закрыть">×</button> : <span />}</header>
+    <div className="medicine-flow__content">
+      {screen === 1 ? <><h2 id="medicine-flow-title">Название лекарства</h2><label>Название лекарства<input value={draft.name} onChange={(event) => { patch({ name: event.target.value }); setValidationMessage(null); }} placeholder="Например, Ибупрофен" autoFocus /></label></> : null}
+      {screen === 2 ? <><h2 id="medicine-flow-title">Категория лекарства</h2><div className="medicine-choice-list">{categories.map((category) => <button className={draft.category === category ? 'selected' : ''} key={category} onClick={() => select('category', category)}>{category}</button>)}</div>{draft.category === 'Своя категория' ? <label>Своя категория<input value={draft.customCategory} onChange={(event) => { patch({ customCategory: event.target.value }); setValidationMessage(null); }} placeholder="Например, Для поездки" autoFocus /></label> : null}</> : null}
+      {screen === 3 ? <><h2 id="medicine-flow-title">Выберите лекарственную форму</h2><p className="medicine-flow__hint">Основные лекарственные формы</p><div className="medicine-choice-list">{mainForms.map((form) => <button className={draft.form === form ? 'selected' : ''} key={form} onClick={() => select('form', form)}>{form}</button>)}</div><p className="medicine-flow__hint">Другие формы</p><div className="medicine-choice-list">{otherForms.map((form) => <button className={draft.form === form ? 'selected' : ''} key={form} onClick={() => select('form', form)}>{form}</button>)}</div></> : null}
+      {screen === 4 ? <><h2 id="medicine-flow-title">Добавление дозировки лекарства</h2><label>Дозировка<input value={draft.amount} onChange={(event) => patch({ amount: event.target.value })} inputMode="decimal" placeholder="Например, 400" autoFocus /></label><p className="medicine-flow__hint">Единицы измерения</p><div className="medicine-choice-list medicine-choice-list--units">{['мг', 'мкг', 'г', 'мл', '%'].map((unit) => <button className={draft.unit === unit ? 'selected' : ''} key={unit} onClick={() => select('unit', unit)}>{unit}</button>)}</div></> : null}
+      {screen === 5 ? <><h2 id="medicine-flow-title">Запас препарата</h2><p className="medicine-flow__description">Укажите, сколько препарата сейчас в наличии.</p><label>Количество, {stockUnit}<input value={draft.quantity} onChange={(event) => { patch({ quantity: event.target.value }); setValidationMessage(null); }} inputMode="decimal" placeholder="Например, 20" autoFocus /></label><label className="expiry-field"><span className="expiry-field__label">Срок годности <small>Необязательно</small></span><input className="expiry-field__input" value={draft.expiresOn} onChange={(event) => { patch({ expiresOn: formatExpirationInput(event.target.value) }); setValidationMessage(null); }} inputMode="numeric" autoComplete="off" placeholder="ДД.ММ.ГГГГ" maxLength={10} /></label></> : null}
+      {screen === 6 ? <><h2 id="medicine-flow-title">{title}</h2><p className="medicine-flow__description">{medicationDescription({ id: '', cabinet_id: '', name: '', form: draft.form, amount: draft.amount, unit: draft.unit, color: '' })}</p><label>Комментарий к приёму<textarea value={draft.note} onChange={(event) => patch({ note: event.target.value })} placeholder="Например, после еды" /></label><label className="purchase-toggle"><span>Напомнить о покупке</span><input type="checkbox" checked={draft.purchaseReminder} onChange={(event) => patch({ purchaseReminder: event.target.checked })} /></label></> : null}
+      {validationMessage ? <p className="flow-validation" role="alert">{validationMessage}</p> : null}
+    </div>
+    <footer className="medicine-flow__footer"><button className="primary-button" disabled={saving} onClick={proceed}>{saving ? 'Сохраняем…' : screen === 6 ? 'Готово' : 'Далее'}</button>{screen === 4 ? <button className="medicine-skip" type="button" onClick={proceed}>Пропустить</button> : null}</footer>
+  </section></div>;
 }
 function AddPackage({ medication, onClose, onSubmit }: { medication: Medication; onClose: () => void; onSubmit: (medication: Medication, quantity: string, expiresOn: string, packageId: string) => Promise<void> }) {
   const [quantity, setQuantity] = useState('');
@@ -206,10 +234,11 @@ function AddPackage({ medication, onClose, onSubmit }: { medication: Medication;
   const unit = ['Жидкость', 'Капли', 'Сироп'].includes(medication.form) ? 'мл' : 'шт.';
   const save = () => {
     if (saving) return;
+    if (expiresOn && !expirationDateKey(expiresOn)) { setError('Укажите существующую дату в формате ДД.ММ.ГГГГ.'); return; }
     setSaving(true); setError(null);
     void onSubmit(medication, quantity, expiresOn, packageId).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Не удалось добавить упаковку.')).finally(() => setSaving(false));
   };
-  return <div className="modal-backdrop"><section className="package-sheet"><div className="modal-handle" /><button className="close package-close" disabled={saving} onClick={onClose}>×</button><h2>Новая упаковка</h2><p>{medication.name}. Она будет учитываться отдельно по сроку годности.</p><label>Количество, {unit}<input value={quantity} onChange={(event) => { setQuantity(event.target.value); setError(null); }} inputMode="decimal" placeholder="Например, 20" autoFocus /></label><label>Срок годности · необязательно<input value={expiresOn} onChange={(event) => { setExpiresOn(event.target.value); setError(null); }} type="date" min={dateKey(today())} /></label>{error ? <p className="flow-validation" role="alert">{error}</p> : null}<button className="primary-button" disabled={saving} onClick={save}>{saving ? 'Добавляем…' : 'Добавить упаковку'}</button></section></div>;
+  return <div className="modal-backdrop"><section className="package-sheet"><div className="modal-handle" /><button className="close package-close" disabled={saving} onClick={onClose}>×</button><h2>Новая упаковка</h2><p>{medication.name}. Она будет учитываться отдельно по сроку годности.</p><label>Количество, {unit}<input value={quantity} onChange={(event) => { setQuantity(event.target.value); setError(null); }} inputMode="decimal" placeholder="Например, 20" autoFocus /></label><label className="expiry-field"><span className="expiry-field__label">Срок годности <small>Необязательно</small></span><input className="expiry-field__input" value={expiresOn} onChange={(event) => { setExpiresOn(formatExpirationInput(event.target.value)); setError(null); }} inputMode="numeric" autoComplete="off" placeholder="ДД.ММ.ГГГГ" maxLength={10} /></label>{error ? <p className="flow-validation" role="alert">{error}</p> : null}<button className="primary-button" disabled={saving} onClick={save}>{saving ? 'Добавляем…' : 'Добавить упаковку'}</button></section></div>;
 }
 function MedicationDetails({ medication, packages, schedules, onClose, onAddPackage }: { medication: Medication; packages: Package[]; schedules: MedicationSchedule[]; onClose: () => void; onAddPackage: () => void }) {
   const currentDate = dateKey(today());

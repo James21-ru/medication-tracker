@@ -204,6 +204,11 @@
   font-weight: 800;
 }
 .medicine-flow__content label > span { color: #8b95a2; font-size: 13px; font-weight: 600; }
+.expiry-field { gap: 10px !important; margin-top: 22px; }
+.expiry-field__label { display: flex; align-items: baseline; justify-content: space-between; width: 100%; color: #303741 !important; font-size: 15px !important; font-weight: 800 !important; }
+.expiry-field__label small { color: #8b95a2; font-size: 13px; font-weight: 600; }
+.expiry-field__input { font-variant-numeric: tabular-nums; letter-spacing: .35px; }
+.package-sheet .expiry-field { margin-top: 0; }
 .medicine-flow__content input,
 .medicine-flow__content textarea {
   box-sizing: border-box;
