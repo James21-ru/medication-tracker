@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { supabase } from './supabase';
-import { prepareTelegramApp } from './telegram';
-
 type Tab = 'doses' | 'cabinet';
 type Cabinet = { id: string; name: string };
 type Medication = { id: string; cabinet_id: string; name: string; form: string; amount: string; unit: string; color: string };
@@ -11,24 +8,29 @@ type Dose = { id: string; medication_id: string; scheduled_time: string; quantit
 type MedicationSchedule = { id: string; medication_id: string; scheduled_time: string; dose_quantity: number; dose_unit: string };
 type ScheduleDraft = { time: string; quantity: string };
 type MedicationDraft = { name: string; form: string; amount: string; unit: string; quantity: string; expiresOn: string; schedules: ScheduleDraft[] };
+type LocalData = { cabinets: Cabinet[]; medications: Medication[]; packages: Package[]; doses: Dose[]; schedules: MedicationSchedule[] };
 
 const today = () => new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
 const dateKey = (date: Date) => new Intl.DateTimeFormat('en-CA').format(date);
 const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const blankDraft: MedicationDraft = { name: '', form: 'Таблетка', amount: '', unit: 'мг', quantity: '', expiresOn: '', schedules: [{ time: '08:00', quantity: '1' }] };
+const localStorageKey = 'lifecare-mini-app-data-v2';
+const emptyLocalData = (): LocalData => ({ cabinets: [{ id: 'cabinet-home', name: 'Домашняя аптечка' }], medications: [], packages: [], doses: [], schedules: [] });
+function readLocalData(): LocalData { try { const value = window.localStorage.getItem(localStorageKey); if (!value) return emptyLocalData(); const parsed = JSON.parse(value) as Partial<LocalData>; if (!Array.isArray(parsed.cabinets) || !Array.isArray(parsed.medications) || !Array.isArray(parsed.packages) || !Array.isArray(parsed.doses) || !Array.isArray(parsed.schedules)) return emptyLocalData(); return { cabinets: parsed.cabinets, medications: parsed.medications, packages: parsed.packages, doses: parsed.doses, schedules: parsed.schedules }; } catch { return emptyLocalData(); } }
 
 export function App() {
+  const initialData = useMemo(readLocalData, []);
   const [tab, setTab] = useState<Tab>('doses');
-  const [loading, setLoading] = useState(true);
+  const [loading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [cabinets, setCabinets] = useState<Cabinet[]>([]);
-  const [selectedCabinetId, setSelectedCabinetId] = useState<string | null>(null);
-  const [medications, setMedications] = useState<Medication[]>([]);
-  const [packages, setPackages] = useState<Package[]>([]);
-  const [doses, setDoses] = useState<Dose[]>([]);
-  const [schedules, setSchedules] = useState<MedicationSchedule[]>([]);
+  const [cabinets, setCabinets] = useState<Cabinet[]>(initialData.cabinets);
+  const [selectedCabinetId, setSelectedCabinetId] = useState<string | null>(initialData.cabinets[0]?.id ?? null);
+  const [medications, setMedications] = useState<Medication[]>(initialData.medications);
+  const [packages, setPackages] = useState<Package[]>(initialData.packages);
+  const [doses, setDoses] = useState<Dose[]>(initialData.doses);
+  const [schedules, setSchedules] = useState<MedicationSchedule[]>(initialData.schedules);
   const [selectedDate, setSelectedDate] = useState(today);
   const [showAddMedication, setShowAddMedication] = useState(false);
   const [packageMedication, setPackageMedication] = useState<Medication | null>(null);
@@ -36,56 +38,8 @@ export function App() {
   const [showCabinetPicker, setShowCabinetPicker] = useState(false);
   const [cabinetEditor, setCabinetEditor] = useState<{ mode: 'create' } | { mode: 'rename'; cabinet: Cabinet } | null>(null);
   const [updatingDoseId, setUpdatingDoseId] = useState<string | null>(null);
-  const loadRequestId = useRef(0);
   const updatingDoseIds = useRef(new Set<string>());
-
-  async function signInAndLoad() {
-    const app = prepareTelegramApp();
-    if (!supabase) { setMessage('Mini App пока не настроен: добавьте Supabase URL и publishable key в окружение хостинга.'); setLoading(false); return; }
-    // A valid Supabase session is already bound to the Telegram identity at
-    // first sign-in. Reuse it while it is fresh instead of creating a new
-    // one-time link and a database connection on every Mini App opening.
-    const existingSession = await supabase.auth.getSession();
-    if (existingSession.data.session && (existingSession.data.session.expires_at ?? 0) > Math.floor(Date.now() / 1000) + 60) { await loadData(selectedDate); return; }
-    if (!app?.initData) { setMessage('Откройте LifeCare из Telegram, чтобы безопасно войти и увидеть свои данные.'); setLoading(false); return; }
-    // Never trust a persisted browser session by itself: bind every Mini App
-    // launch back to the signed Telegram identity before reading its data.
-    const result = await supabase.functions.invoke('telegram-mini-session', { body: { init_data: app.initData } });
-    if (result.error || !result.data?.token_hash) { setMessage('Не удалось подтвердить Telegram-профиль. Попробуйте открыть Mini App ещё раз.'); setLoading(false); return; }
-    const auth = await supabase.auth.verifyOtp({ token_hash: result.data.token_hash, type: 'email' });
-    if (auth.error) { setMessage('Не удалось открыть защищённую сессию. Попробуйте ещё раз.'); setLoading(false); return; }
-    await loadData(selectedDate);
-  }
-
-  async function loadData(forDate = selectedDate, showLoading = true) {
-    if (!supabase) return;
-    const requestId = ++loadRequestId.current;
-    if (showLoading) setLoading(true);
-    try {
-      const [cabinetsResult, medicationsResult, packagesResult, dosesResult, schedulesResult] = await Promise.all([
-        supabase.from('cabinets').select('id,name').is('deleted_at', null).order('created_at'),
-        supabase.from('medications').select('id,cabinet_id,name,form,amount,unit,color').is('deleted_at', null).order('created_at', { ascending: false }),
-        supabase.from('medication_packages').select('id,medication_id,quantity_remaining,unit,expires_on').is('deleted_at', null).order('expires_on', { ascending: true, nullsFirst: false }),
-        supabase.from('dose_events').select('id,medication_id,scheduled_time,quantity,unit,status').eq('scheduled_on', dateKey(forDate)).is('deleted_at', null).order('scheduled_time'),
-        supabase.from('medication_schedules').select('id,medication_id,scheduled_time,dose_quantity,dose_unit').eq('active', true).is('deleted_at', null),
-      ]);
-      if (requestId !== loadRequestId.current) return;
-      const error = cabinetsResult.error ?? medicationsResult.error ?? packagesResult.error ?? dosesResult.error ?? schedulesResult.error;
-      if (error) setMessage('Не удалось загрузить данные. Проверьте подключение и доступ к Supabase.');
-      else {
-        const loadedCabinets = (cabinetsResult.data ?? []) as Cabinet[];
-        setCabinets(loadedCabinets);
-        setSelectedCabinetId((current) => current && loadedCabinets.some((cabinet) => cabinet.id === current) ? current : loadedCabinets[0]?.id ?? null);
-        setMedications((medicationsResult.data ?? []) as Medication[]); setPackages((packagesResult.data ?? []) as Package[]); setDoses((dosesResult.data ?? []) as Dose[]); setSchedules((schedulesResult.data ?? []) as MedicationSchedule[]); setMessage(null);
-      }
-    } catch {
-      if (requestId === loadRequestId.current) setMessage('Не удалось загрузить данные. Проверьте подключение и попробуйте ещё раз.');
-    } finally {
-      if (showLoading && requestId === loadRequestId.current) setLoading(false);
-    }
-  }
-
-  useEffect(() => { void signInAndLoad(); }, []);
+  useEffect(() => { window.localStorage.setItem(localStorageKey, JSON.stringify({ cabinets, medications, packages, doses, schedules } satisfies LocalData)); }, [cabinets, medications, packages, doses, schedules]);
   const medicationById = useMemo(() => new Map(medications.map((item) => [item.id, item])), [medications]);
   const selectedCabinet = useMemo(() => cabinets.find((item) => item.id === selectedCabinetId) ?? null, [cabinets, selectedCabinetId]);
   const cabinetMedications = useMemo(() => medications.filter((item) => item.cabinet_id === selectedCabinetId), [medications, selectedCabinetId]);
@@ -93,32 +47,16 @@ export function App() {
   const schedulesByMedication = useMemo(() => schedules.reduce<Map<string, MedicationSchedule[]>>((result, item) => { result.set(item.medication_id, [...(result.get(item.medication_id) ?? []), item]); return result; }, new Map()), [schedules]);
   const showNotice = (text: string) => { setNotice(text); window.setTimeout(() => setNotice((current) => current === text ? null : current), 4000); };
 
-  async function chooseDate(date: Date) { setSelectedDate(date); await loadData(date, false); }
-  async function refreshData() { setRefreshing(true); try { await loadData(selectedDate, false); } finally { setRefreshing(false); } }
-  async function runTelegramMutation(mutation: Record<string, unknown>) {
-    if (!supabase) throw new Error('Действие недоступно: Mini App не подключён к Supabase.');
-    const app = prepareTelegramApp();
-    if (!app?.initData) throw new Error('Откройте LifeCare из Telegram, чтобы подтвердить действие.');
-    let timeoutId: number | undefined;
-    try {
-      const result = await Promise.race([
-        supabase.functions.invoke('telegram-mini-session', { body: { init_data: app.initData, mutation } }),
-        new Promise<never>((_, reject) => { timeoutId = window.setTimeout(() => reject(new Error('Сервер не ответил за 15 секунд. Проверьте сеть и повторите действие.')), 15_000); }),
-      ]);
-      if (result.error || !result.data) throw new Error('Не удалось подтвердить действие. Попробуйте ещё раз.');
-      return result.data as { status: string; available?: number; unit?: string };
-    } finally {
-      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
-    }
-  }
+  async function chooseDate(date: Date) { setSelectedDate(date); }
+  async function refreshData() { setRefreshing(true); showNotice('Данные сохранены на этом устройстве.'); window.setTimeout(() => setRefreshing(false), 180); }
   async function markDose(dose: Dose, status: 'taken' | 'skipped') {
     if (dose.status !== 'pending') return;
     if (updatingDoseIds.current.has(dose.id)) return;
     updatingDoseIds.current.add(dose.id); setUpdatingDoseId(dose.id);
     try {
-      const result = await runTelegramMutation({ type: 'complete_dose', dose_id: dose.id, status });
-      if (result.status === 'insufficient_stock') { setMessage(`Недостаточно препарата в аптечке: доступно ${result.available ?? 0} ${result.unit ?? ''}. Добавьте упаковку перед отметкой приёма.`); return; }
-      const completedStatus = result.status === 'taken' ? 'taken' : 'skipped';
+      const available = packages.filter((item) => item.medication_id === dose.medication_id && item.unit === dose.unit && Number(item.quantity_remaining) > 0 && (!item.expires_on || item.expires_on >= dateKey(today()))).reduce((total, item) => total + Number(item.quantity_remaining), 0);
+      if (status === 'taken' && available < Number(dose.quantity)) { setMessage(`Недостаточно препарата в аптечке: доступно ${available} ${dose.unit}. Добавьте упаковку перед отметкой приёма.`); return; }
+      const completedStatus = status;
       setDoses((current) => current.map((item) => item.id === dose.id ? { ...item, status: completedStatus } : item));
       if (completedStatus === 'taken') {
         setPackages((current) => {
@@ -140,7 +78,6 @@ export function App() {
     finally { updatingDoseIds.current.delete(dose.id); setUpdatingDoseId((current) => current === dose.id ? null : current); }
   }
   async function addMedication(draft: MedicationDraft, operationId: string) {
-    if (!supabase) throw new Error('Сохранение недоступно: Mini App не подключён к Supabase. Попробуйте позже.');
     if (!selectedCabinetId) throw new Error('Сначала создайте аптечку.');
     const quantity = Number(draft.quantity);
     const scheduleEntries = draft.schedules.map((schedule, index) => ({ id: `${operationId}-schedule-${index + 1}`, time: schedule.time, quantity: Number(schedule.quantity) }));
@@ -148,7 +85,6 @@ export function App() {
     const stockUnit = ['Жидкость', 'Капли', 'Сироп'].includes(draft.form) ? 'мл' : 'шт.';
     const medicationId = `${operationId}-medication`;
     const packageId = `${operationId}-package`;
-    await runTelegramMutation({ type: 'create_medication', cabinet_id: selectedCabinetId, medication_id: medicationId, package_id: packageId, name: draft.name.trim(), form: draft.form, amount: draft.amount.trim(), medication_unit: draft.unit, color: '#20A278', quantity, stock_unit: stockUnit, expires_on: draft.expiresOn || null, schedules: scheduleEntries, start_on: dateKey(today()) });
     setMedications((current) => [{ id: medicationId, cabinet_id: selectedCabinetId, name: draft.name.trim(), form: draft.form, amount: draft.amount.trim(), unit: draft.unit, color: '#20A278' }, ...current]);
     setPackages((current) => [{ id: packageId, medication_id: medicationId, quantity_remaining: quantity, unit: stockUnit, expires_on: draft.expiresOn || null }, ...current]);
     setSchedules((current) => [...scheduleEntries.map((schedule) => ({ id: schedule.id, medication_id: medicationId, scheduled_time: schedule.time, dose_quantity: schedule.quantity, dose_unit: stockUnit })), ...current]);
@@ -157,30 +93,22 @@ export function App() {
     showNotice('Препарат добавлен в аптечку.');
   }
   async function addPackage(medication: Medication, quantityText: string, expiresOn: string, packageId: string) {
-    if (!supabase) throw new Error('Сохранение недоступно: Mini App не подключён к Supabase. Попробуйте позже.');
     const quantity = Number(quantityText);
     if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('Укажите количество в упаковке.');
     const unit = ['Жидкость', 'Капли', 'Сироп'].includes(medication.form) ? 'мл' : 'шт.';
-    const { error } = await supabase.from('medication_packages').insert({ id: packageId, medication_id: medication.id, quantity_initial: quantity, quantity_remaining: quantity, unit, expires_on: expiresOn || null, created_at: new Date().toISOString() });
-    if (error) throw new Error('Не удалось добавить упаковку. Попробуйте ещё раз.');
     setPackages((current) => [{ id: packageId, medication_id: medication.id, quantity_remaining: quantity, unit, expires_on: expiresOn || null }, ...current]);
     setPackageMedication(null);
     showNotice('Упаковка добавлена в аптечку.');
   }
 
   async function saveCabinet(name: string) {
-    if (!supabase) throw new Error('Сохранение недоступно: Mini App не подключён к Supabase.');
     const normalizedName = name.trim();
     if (!normalizedName) throw new Error('Введите название аптечки.');
     if (cabinetEditor?.mode === 'rename') {
-      const { error } = await supabase.from('cabinets').update({ name: normalizedName }).eq('id', cabinetEditor.cabinet.id);
-      if (error) throw new Error('Не удалось сохранить название аптечки. Попробуйте ещё раз.');
       setCabinets((current) => current.map((item) => item.id === cabinetEditor.cabinet.id ? { ...item, name: normalizedName } : item));
       showNotice('Название аптечки изменено.');
     } else {
       const cabinetId = makeId('cabinet');
-      const { error } = await supabase.from('cabinets').insert({ id: cabinetId, name: normalizedName });
-      if (error) throw new Error('Не удалось создать аптечку. Попробуйте ещё раз.');
       setCabinets((current) => [...current, { id: cabinetId, name: normalizedName }]);
       setSelectedCabinetId(cabinetId);
       showNotice('Новая аптечка создана.');
