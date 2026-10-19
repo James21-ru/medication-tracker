@@ -311,3 +311,18 @@
 .delete-confirm__action { min-height: 56px; border-radius: 18px; color: #fff; background: #c84f64; font-size: 16px; font-weight: 800; }
 .delete-confirm .secondary-button { min-height: 54px; margin: 0; }
 @media (min-width: 760px) { .medication-editor, .delete-confirm { margin: auto; border-radius: 34px; } }
+
+/* Local pharmacy-selection prototype. It deliberately never sends orders or prescriptions. */
+.pharmacy-sheet { display: grid; align-content: start; gap: 16px; width: min(100%, 560px); max-height: calc(100dvh - 12px); margin: 12px auto 0; padding: 14px 28px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; border-radius: 34px 34px 0 0; background: #fff; }
+.pharmacy-sheet h2 { margin: 3px 0 0; color: #20252d; font-size: 30px; letter-spacing: -1px; }
+.pharmacy-sheet > p { margin: -8px 0 0; color: #697381; font-size: 15px; }
+.demo-disclaimer { padding: 11px 13px; border-radius: 14px; color: #7b652d; background: #fff6dc; font-size: 12px; line-height: 1.4; font-weight: 700; }
+.pharmacy-list { display: grid; gap: 10px; }
+.pharmacy-offer { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; padding: 17px; border: 1px solid #dbe2eb; border-radius: 20px; color: #29313a; background: #fff; text-align: left; }
+.pharmacy-offer strong { font-size: 17px; } .pharmacy-offer b { color: #1688f7; font-size: 16px; }
+.pharmacy-offer span, .pharmacy-offer small { grid-column: 1 / -1; color: #687381; font-size: 13px; line-height: 1.35; }
+.pharmacy-offer small { color: #278065; font-weight: 800; }
+.order-summary { display: grid; gap: 7px; padding: 18px; border-radius: 21px; background: #f2f5f8; }
+.order-summary strong { font-size: 20px; } .order-summary span { color: #66717d; font-size: 14px; } .order-summary b { color: #27303a; font-size: 15px; } .order-summary small { color: #278065; font-size: 13px; font-weight: 800; } .order-summary hr { width: 100%; margin: 7px 0; border: 0; border-top: 1px solid #dbe1e7; }
+.pharmacy-sheet > .primary-button, .pharmacy-sheet > .secondary-button { width: 100%; margin: 0; }
+@media (min-width: 760px) { .pharmacy-sheet { margin: auto; border-radius: 34px; } }
