@@ -3,8 +3,10 @@ import postgres from 'npm:postgres@3.4.9';
 
 type TelegramUser = { id: number; first_name?: string; last_name?: string; username?: string; photo_url?: string };
 type Mutation =
-  | { type: 'create_medication'; medication_id: string; package_id: string; name: string; form: string; amount: string; medication_unit: string; color: string; quantity: number; stock_unit: string; expires_on: string | null; schedules: Array<{ id: string; time: string; quantity: number }>; start_on: string }
+  | { type: 'create_medication'; cabinet_id: string; medication_id: string; package_id: string; name: string; form: string; amount: string; medication_unit: string; color: string; quantity: number; stock_unit: string; expires_on: string | null; schedules: Array<{ id: string; time: string; quantity: number }>; start_on: string }
   | { type: 'add_package'; medication_id: string; package_id: string; quantity: number; stock_unit: string; expires_on: string | null }
+  | { type: 'create_cabinet'; cabinet_id: string; name: string }
+  | { type: 'rename_cabinet'; cabinet_id: string; name: string }
   | { type: 'complete_dose'; dose_id: string; status: 'taken' | 'skipped' };
 
 const encoder = new TextEncoder();
@@ -143,20 +145,32 @@ function parseMutation(value: unknown): Mutation {
       return { id: identifier(value.id, `schedules[${index}].id`), time: timeOnly(value.time, `schedules[${index}].time`), quantity: doseQuantity };
     });
     if (new Set(schedules.map((schedule) => schedule.id)).size !== schedules.length) throw new Error('duplicate schedule ids');
-    return { type: 'create_medication', medication_id: medicationId, package_id: packageId, name: nonEmpty(input.name, 'name'), form: nonEmpty(input.form, 'form'), amount: nonEmpty(input.amount, 'amount'), medication_unit: nonEmpty(input.medication_unit, 'medication_unit'), color: nonEmpty(input.color, 'color'), quantity, stock_unit: stockUnit, expires_on: expiresOn, schedules, start_on: dateOnly(input.start_on, 'start_on') };
+    return { type: 'create_medication', cabinet_id: identifier(input.cabinet_id, 'cabinet_id'), medication_id: medicationId, package_id: packageId, name: nonEmpty(input.name, 'name'), form: nonEmpty(input.form, 'form'), amount: nonEmpty(input.amount, 'amount'), medication_unit: nonEmpty(input.medication_unit, 'medication_unit'), color: nonEmpty(input.color, 'color'), quantity, stock_unit: stockUnit, expires_on: expiresOn, schedules, start_on: dateOnly(input.start_on, 'start_on') };
   }
+  if (input.type === 'create_cabinet' || input.type === 'rename_cabinet') return { type: input.type, cabinet_id: identifier(input.cabinet_id, 'cabinet_id'), name: nonEmpty(input.name, 'name').slice(0, 60) };
   if (input.type === 'complete_dose' && (input.status === 'taken' || input.status === 'skipped')) return { type: 'complete_dose', dose_id: identifier(input.dose_id, 'dose_id'), status: input.status };
   throw new Error('invalid mutation');
 }
 
 async function runMutation(sql: ReturnType<typeof postgres>, ownerId: string, mutation: Mutation) {
+  if (mutation.type === 'create_cabinet') {
+    await sql`insert into public.cabinets (id, owner_id, name, created_at) values (${mutation.cabinet_id}, ${ownerId}, ${mutation.name}, now()) on conflict (id) do nothing`;
+    return { status: 'created' };
+  }
+  if (mutation.type === 'rename_cabinet') {
+    const cabinets = await sql<{ id: string }[]>`update public.cabinets set name = ${mutation.name} where id = ${mutation.cabinet_id} and owner_id = ${ownerId} and deleted_at is null returning id`;
+    if (!cabinets[0]) throw new Error('cabinet not found');
+    return { status: 'updated' };
+  }
   if (mutation.type === 'create_medication') {
     await sql.begin(async (transaction) => {
+      const cabinets = await transaction<{ id: string }[]>`select id from public.cabinets where id = ${mutation.cabinet_id} and owner_id = ${ownerId} and deleted_at is null for update`;
+      if (!cabinets[0]) throw new Error('cabinet not found');
       if (mutation.expires_on) {
         const dates = await transaction<{ expired: boolean }[]>`select ${mutation.expires_on}::date < current_date as expired`;
         if (dates[0]?.expired) throw new Error('package expiry is in the past');
       }
-      await transaction`insert into public.medications (id, owner_id, name, form, amount, unit, color, created_at) values (${mutation.medication_id}, ${ownerId}, ${mutation.name}, ${mutation.form}, ${mutation.amount}, ${mutation.medication_unit}, ${mutation.color}, now()) on conflict (id) do nothing`;
+      await transaction`insert into public.medications (id, owner_id, cabinet_id, name, form, amount, unit, color, created_at) values (${mutation.medication_id}, ${ownerId}, ${mutation.cabinet_id}, ${mutation.name}, ${mutation.form}, ${mutation.amount}, ${mutation.medication_unit}, ${mutation.color}, now()) on conflict (id) do nothing`;
       await transaction`insert into public.medication_packages (id, owner_id, medication_id, quantity_initial, quantity_remaining, unit, expires_on, created_at) values (${mutation.package_id}, ${ownerId}, ${mutation.medication_id}, ${mutation.quantity}, ${mutation.quantity}, ${mutation.stock_unit}, ${mutation.expires_on}, now()) on conflict (id) do nothing`;
       for (const schedule of mutation.schedules) {
         await transaction`insert into public.medication_schedules (id, owner_id, medication_id, kind, weekdays_json, scheduled_time, dose_quantity, dose_unit, start_on, interval_days, cycle_on_days, cycle_off_days, active, created_at) values (${schedule.id}, ${ownerId}, ${mutation.medication_id}, 'daily', ${JSON.stringify([0, 1, 2, 3, 4, 5, 6])}::jsonb, ${schedule.time}, ${schedule.quantity}, ${mutation.stock_unit}, ${mutation.start_on}, 1, 1, 0, true, now()) on conflict (id) do nothing`;

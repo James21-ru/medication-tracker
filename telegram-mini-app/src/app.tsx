@@ -4,7 +4,8 @@ import { supabase } from './supabase';
 import { prepareTelegramApp } from './telegram';
 
 type Tab = 'doses' | 'cabinet';
-type Medication = { id: string; name: string; form: string; amount: string; unit: string; color: string };
+type Cabinet = { id: string; name: string };
+type Medication = { id: string; cabinet_id: string; name: string; form: string; amount: string; unit: string; color: string };
 type Package = { id: string; medication_id: string; quantity_remaining: number; unit: string; expires_on: string | null };
 type Dose = { id: string; medication_id: string; scheduled_time: string; quantity: number; unit: string; status: 'pending' | 'taken' | 'skipped' };
 type MedicationSchedule = { id: string; medication_id: string; scheduled_time: string; dose_quantity: number; dose_unit: string };
@@ -22,6 +23,8 @@ export function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [cabinets, setCabinets] = useState<Cabinet[]>([]);
+  const [selectedCabinetId, setSelectedCabinetId] = useState<string | null>(null);
   const [medications, setMedications] = useState<Medication[]>([]);
   const [packages, setPackages] = useState<Package[]>([]);
   const [doses, setDoses] = useState<Dose[]>([]);
@@ -30,6 +33,8 @@ export function App() {
   const [showAddMedication, setShowAddMedication] = useState(false);
   const [packageMedication, setPackageMedication] = useState<Medication | null>(null);
   const [detailMedication, setDetailMedication] = useState<Medication | null>(null);
+  const [showCabinetPicker, setShowCabinetPicker] = useState(false);
+  const [cabinetEditor, setCabinetEditor] = useState<{ mode: 'create' } | { mode: 'rename'; cabinet: Cabinet } | null>(null);
   const [updatingDoseId, setUpdatingDoseId] = useState<string | null>(null);
   const loadRequestId = useRef(0);
   const updatingDoseIds = useRef(new Set<string>());
@@ -52,16 +57,22 @@ export function App() {
     const requestId = ++loadRequestId.current;
     if (showLoading) setLoading(true);
     try {
-      const [medicationsResult, packagesResult, dosesResult, schedulesResult] = await Promise.all([
-        supabase.from('medications').select('id,name,form,amount,unit,color').is('deleted_at', null).order('created_at', { ascending: false }),
+      const [cabinetsResult, medicationsResult, packagesResult, dosesResult, schedulesResult] = await Promise.all([
+        supabase.from('cabinets').select('id,name').is('deleted_at', null).order('created_at'),
+        supabase.from('medications').select('id,cabinet_id,name,form,amount,unit,color').is('deleted_at', null).order('created_at', { ascending: false }),
         supabase.from('medication_packages').select('id,medication_id,quantity_remaining,unit,expires_on').is('deleted_at', null).order('expires_on', { ascending: true, nullsFirst: false }),
         supabase.from('dose_events').select('id,medication_id,scheduled_time,quantity,unit,status').eq('scheduled_on', dateKey(forDate)).is('deleted_at', null).order('scheduled_time'),
         supabase.from('medication_schedules').select('id,medication_id,scheduled_time,dose_quantity,dose_unit').eq('active', true).is('deleted_at', null),
       ]);
       if (requestId !== loadRequestId.current) return;
-      const error = medicationsResult.error ?? packagesResult.error ?? dosesResult.error ?? schedulesResult.error;
+      const error = cabinetsResult.error ?? medicationsResult.error ?? packagesResult.error ?? dosesResult.error ?? schedulesResult.error;
       if (error) setMessage('Не удалось загрузить данные. Проверьте подключение и доступ к Supabase.');
-      else { setMedications((medicationsResult.data ?? []) as Medication[]); setPackages((packagesResult.data ?? []) as Package[]); setDoses((dosesResult.data ?? []) as Dose[]); setSchedules((schedulesResult.data ?? []) as MedicationSchedule[]); setMessage(null); }
+      else {
+        const loadedCabinets = (cabinetsResult.data ?? []) as Cabinet[];
+        setCabinets(loadedCabinets);
+        setSelectedCabinetId((current) => current && loadedCabinets.some((cabinet) => cabinet.id === current) ? current : loadedCabinets[0]?.id ?? null);
+        setMedications((medicationsResult.data ?? []) as Medication[]); setPackages((packagesResult.data ?? []) as Package[]); setDoses((dosesResult.data ?? []) as Dose[]); setSchedules((schedulesResult.data ?? []) as MedicationSchedule[]); setMessage(null);
+      }
     } catch {
       if (requestId === loadRequestId.current) setMessage('Не удалось загрузить данные. Проверьте подключение и попробуйте ещё раз.');
     } finally {
@@ -71,6 +82,8 @@ export function App() {
 
   useEffect(() => { void signInAndLoad(); }, []);
   const medicationById = useMemo(() => new Map(medications.map((item) => [item.id, item])), [medications]);
+  const selectedCabinet = useMemo(() => cabinets.find((item) => item.id === selectedCabinetId) ?? null, [cabinets, selectedCabinetId]);
+  const cabinetMedications = useMemo(() => medications.filter((item) => item.cabinet_id === selectedCabinetId), [medications, selectedCabinetId]);
   const packagesByMedication = useMemo(() => packages.reduce<Map<string, Package[]>>((result, item) => { result.set(item.medication_id, [...(result.get(item.medication_id) ?? []), item]); return result; }, new Map()), [packages]);
   const schedulesByMedication = useMemo(() => schedules.reduce<Map<string, MedicationSchedule[]>>((result, item) => { result.set(item.medication_id, [...(result.get(item.medication_id) ?? []), item]); return result; }, new Map()), [schedules]);
   const showNotice = (text: string) => { setNotice(text); window.setTimeout(() => setNotice((current) => current === text ? null : current), 4000); };
@@ -124,14 +137,15 @@ export function App() {
   }
   async function addMedication(draft: MedicationDraft, operationId: string) {
     if (!supabase) throw new Error('Сохранение недоступно: Mini App не подключён к Supabase. Попробуйте позже.');
+    if (!selectedCabinetId) throw new Error('Сначала создайте аптечку.');
     const quantity = Number(draft.quantity);
     const scheduleEntries = draft.schedules.map((schedule, index) => ({ id: `${operationId}-schedule-${index + 1}`, time: schedule.time, quantity: Number(schedule.quantity) }));
     if (!draft.name.trim() || !draft.amount.trim() || !Number.isFinite(quantity) || quantity <= 0 || !scheduleEntries.length || scheduleEntries.some((schedule) => !Number.isFinite(schedule.quantity) || schedule.quantity <= 0 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(schedule.time))) { setMessage('Заполните данные препарата, упаковки и ежедневного приёма.'); return; }
     const stockUnit = ['Жидкость', 'Капли', 'Сироп'].includes(draft.form) ? 'мл' : 'шт.';
     const medicationId = `${operationId}-medication`;
     const packageId = `${operationId}-package`;
-    await runTelegramMutation({ type: 'create_medication', medication_id: medicationId, package_id: packageId, name: draft.name.trim(), form: draft.form, amount: draft.amount.trim(), medication_unit: draft.unit, color: '#20A278', quantity, stock_unit: stockUnit, expires_on: draft.expiresOn || null, schedules: scheduleEntries, start_on: dateKey(today()) });
-    setMedications((current) => [{ id: medicationId, name: draft.name.trim(), form: draft.form, amount: draft.amount.trim(), unit: draft.unit, color: '#20A278' }, ...current]);
+    await runTelegramMutation({ type: 'create_medication', cabinet_id: selectedCabinetId, medication_id: medicationId, package_id: packageId, name: draft.name.trim(), form: draft.form, amount: draft.amount.trim(), medication_unit: draft.unit, color: '#20A278', quantity, stock_unit: stockUnit, expires_on: draft.expiresOn || null, schedules: scheduleEntries, start_on: dateKey(today()) });
+    setMedications((current) => [{ id: medicationId, cabinet_id: selectedCabinetId, name: draft.name.trim(), form: draft.form, amount: draft.amount.trim(), unit: draft.unit, color: '#20A278' }, ...current]);
     setPackages((current) => [{ id: packageId, medication_id: medicationId, quantity_remaining: quantity, unit: stockUnit, expires_on: draft.expiresOn || null }, ...current]);
     setSchedules((current) => [...scheduleEntries.map((schedule) => ({ id: schedule.id, medication_id: medicationId, scheduled_time: schedule.time, dose_quantity: schedule.quantity, dose_unit: stockUnit })), ...current]);
     if (dateKey(selectedDate) === dateKey(today())) setDoses((current) => [...current, ...scheduleEntries.map((schedule) => ({ id: `${schedule.id}-dose-${dateKey(today()).replaceAll('-', '')}`, medication_id: medicationId, scheduled_time: schedule.time, quantity: schedule.quantity, unit: stockUnit, status: 'pending' as const }))].sort((left, right) => left.scheduled_time.localeCompare(right.scheduled_time)));
@@ -151,17 +165,36 @@ export function App() {
     void loadData(selectedDate, false);
   }
 
-  const title = tab === 'doses' ? 'Приёмы' : 'Аптечка';
+  async function saveCabinet(name: string) {
+    const normalizedName = name.trim();
+    if (!normalizedName) throw new Error('Введите название аптечки.');
+    if (cabinetEditor?.mode === 'rename') {
+      await runTelegramMutation({ type: 'rename_cabinet', cabinet_id: cabinetEditor.cabinet.id, name: normalizedName });
+      setCabinets((current) => current.map((item) => item.id === cabinetEditor.cabinet.id ? { ...item, name: normalizedName } : item));
+      showNotice('Название аптечки изменено.');
+    } else {
+      const cabinetId = makeId('cabinet');
+      await runTelegramMutation({ type: 'create_cabinet', cabinet_id: cabinetId, name: normalizedName });
+      setCabinets((current) => [...current, { id: cabinetId, name: normalizedName }]);
+      setSelectedCabinetId(cabinetId);
+      showNotice('Новая аптечка создана.');
+    }
+    setCabinetEditor(null);
+  }
+
+  const title = tab === 'doses' ? 'Приёмы' : selectedCabinet?.name ?? 'Аптечка';
   const eyebrow = tab === 'doses' ? 'СЕГОДНЯ' : 'ДОМАШНЯЯ АПТЕЧКА';
   return <main className={`app-shell app-shell--${tab}`}>
-    <header className="header"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1></div><button className="round-button" disabled={refreshing} onClick={tab === 'cabinet' ? () => setShowAddMedication(true) : () => void refreshData()} aria-label={tab === 'cabinet' ? 'Добавить препарат' : 'Обновить данные'}>{tab === 'cabinet' ? '+' : refreshing ? '…' : '↻'}</button></header>
+    <header className="header">{tab === 'cabinet' ? <div className="cabinet-heading"><p className="eyebrow">{eyebrow}</p><div className="cabinet-title-row"><h1>{title}</h1>{selectedCabinet ? <button className="cabinet-edit" onClick={() => setCabinetEditor({ mode: 'rename', cabinet: selectedCabinet })} aria-label="Переименовать аптечку">✎</button> : null}</div><div className="cabinet-toolbar"><button className="cabinet-switch" onClick={() => setShowCabinetPicker(true)}>{selectedCabinet ? 'Все аптечки' : 'Выбрать аптечку'} <span>⌄</span></button><button className="cabinet-new" onClick={() => setCabinetEditor({ mode: 'create' })}>＋ Новая</button></div></div> : <div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1></div>}<button className="round-button" disabled={refreshing || (tab === 'cabinet' && !selectedCabinet)} onClick={tab === 'cabinet' ? () => setShowAddMedication(true) : () => void refreshData()} aria-label={tab === 'cabinet' ? 'Добавить препарат' : 'Обновить данные'}>{tab === 'cabinet' ? '+' : refreshing ? '…' : '↻'}</button></header>
     {message ? <div className="message" role="alert">{message}</div> : null}
     {notice ? <div className="notice" role="status">{notice}</div> : null}
-    {loading ? <div className="loading"><span className="loader" />Загружаем данные…</div> : tab === 'doses' ? <Doses doses={doses} medicationById={medicationById} selectedDate={selectedDate} updatingDoseId={updatingDoseId} onSelectDate={chooseDate} onMark={markDose} /> : <Cabinet medications={medications} packagesByMedication={packagesByMedication} onAdd={() => setShowAddMedication(true)} onAddPackage={setPackageMedication} onOpen={setDetailMedication} />}
+    {loading ? <div className="loading"><span className="loader" />Загружаем данные…</div> : tab === 'doses' ? <Doses doses={doses} medicationById={medicationById} selectedDate={selectedDate} updatingDoseId={updatingDoseId} onSelectDate={chooseDate} onMark={markDose} /> : selectedCabinet ? <Cabinet cabinetName={selectedCabinet.name} medications={cabinetMedications} packagesByMedication={packagesByMedication} onAdd={() => setShowAddMedication(true)} onAddPackage={setPackageMedication} onOpen={setDetailMedication} /> : <CabinetEmpty onCreate={() => setCabinetEditor({ mode: 'create' })} />}
     <nav className="tabbar tabbar--two" aria-label="Разделы"><TabButton active={tab === 'doses'} onClick={() => setTab('doses')} icon="⌂" label="Приёмы" /><TabButton active={tab === 'cabinet'} onClick={() => setTab('cabinet')} icon="▰" label="Аптечка" /></nav>
     {showAddMedication ? <AddMedication onClose={() => setShowAddMedication(false)} onSubmit={addMedication} /> : null}
     {packageMedication ? <AddPackage medication={packageMedication} onClose={() => setPackageMedication(null)} onSubmit={addPackage} /> : null}
     {detailMedication ? <MedicationDetails medication={detailMedication} packages={packagesByMedication.get(detailMedication.id) ?? []} schedules={schedulesByMedication.get(detailMedication.id) ?? []} onClose={() => setDetailMedication(null)} onAddPackage={() => { setDetailMedication(null); setPackageMedication(detailMedication); }} /> : null}
+    {showCabinetPicker ? <CabinetPicker cabinets={cabinets} medications={medications} selectedId={selectedCabinetId} onClose={() => setShowCabinetPicker(false)} onSelect={(cabinetId) => { setSelectedCabinetId(cabinetId); setShowCabinetPicker(false); }} onCreate={() => { setShowCabinetPicker(false); setCabinetEditor({ mode: 'create' }); }} /> : null}
+    {cabinetEditor ? <CabinetEditor cabinet={cabinetEditor.mode === 'rename' ? cabinetEditor.cabinet : null} onClose={() => setCabinetEditor(null)} onSave={saveCabinet} /> : null}
   </main>;
 }
 
@@ -184,7 +217,19 @@ function Calendar({ selectedDate, onSelect }: { selectedDate: Date; onSelect: (d
 function NextDose({ dose, medication, canMark, isUpdating, onMark }: { dose: Dose; medication?: Medication; canMark: boolean; isUpdating: boolean; onMark: (dose: Dose, status: 'taken' | 'skipped') => Promise<void> }) { return <article className="next-dose"><p>{canMark ? 'СЛЕДУЮЩИЙ ПРИЁМ' : 'ЗАПЛАНИРОВАНО'}</p><div className="next-dose__title"><span><strong>{medication?.name ?? 'Препарат'}</strong><small>{medication ? `${medication.form} · ${medication.amount} ${medication.unit}` : `${dose.quantity} ${dose.unit}`}</small></span><time>{dose.scheduled_time.slice(0, 5)}</time></div>{canMark ? <><button disabled={isUpdating} onClick={() => void onMark(dose, 'taken')}>{isUpdating ? 'Отмечаем…' : 'Принять сейчас'}</button><button className="text-button" disabled={isUpdating} onClick={() => void onMark(dose, 'skipped')}>Пропустить</button></> : <p className="next-dose__notice">Отметить приём можно в назначенный день.</p>}</article>; }
 function DoseRow({ dose, medication, canMark, isUpdating, onMark }: { dose: Dose; medication?: Medication; canMark: boolean; isUpdating: boolean; onMark: (dose: Dose, status: 'taken' | 'skipped') => Promise<void> }) { return <article className="dose-row"><time>{dose.scheduled_time.slice(0, 5)}</time><span className="med-icon med-icon--small" style={{ background: medication?.color ?? '#20A278' }}>◉</span><div><strong>{medication?.name ?? 'Препарат'}</strong><small>{dose.quantity} {dose.unit}</small></div>{dose.status === 'pending' ? canMark ? <button disabled={isUpdating} onClick={() => void onMark(dose, 'taken')} aria-label="Отметить принятым">{isUpdating ? '…' : '✓'}</button> : <span className="dose-status">Запланировано</span> : <span className={`dose-status ${dose.status}`}>{dose.status === 'taken' ? 'Принято' : 'Пропущено'}</span>}</article>; }
 
-function Cabinet({ medications, packagesByMedication, onAdd, onAddPackage, onOpen }: { medications: Medication[]; packagesByMedication: Map<string, Package[]>; onAdd: () => void; onAddPackage: (medication: Medication) => void; onOpen: (medication: Medication) => void }) { const currentDate = dateKey(today()); return <section className="cabinet-screen"><p className="medication-count">Препараты · {medications.length}</p>{medications.length ? medications.map((medication) => { const packs = packagesByMedication.get(medication.id) ?? []; const available = packs.filter((item) => !item.expires_on || item.expires_on >= currentDate); const stock = available.reduce((total, item) => total + Number(item.quantity_remaining), 0); const nextExpiry = available.filter((item) => item.expires_on).map((item) => item.expires_on!).sort()[0]; const expiredCount = packs.filter((item) => item.expires_on && item.expires_on < currentDate && Number(item.quantity_remaining) > 0).length; return <article key={medication.id} className="cabinet-card"><span className="med-icon" style={{ background: medication.color }}>◉</span><div><h2>{medication.name}</h2><p>{medication.form} · {medication.amount} {medication.unit}</p><strong>В запасе: {stock} {packs[0]?.unit ?? 'шт.'}</strong>{nextExpiry ? <small>Ближайший срок: {new Date(`${nextExpiry}T12:00:00`).toLocaleDateString('ru-RU')}</small> : null}{expiredCount ? <small className="expired-note">Просрочено упаковок: {expiredCount}</small> : null}<div className="cabinet-actions"><button onClick={() => onOpen(medication)}>Открыть карточку ›</button><button onClick={() => onAddPackage(medication)}>＋ Упаковка</button></div></div></article>; }) : <div className="empty"><div className="empty-icon">＋</div><h2>Аптечка пуста</h2><p>Добавьте первую упаковку — она сохранится в цифровой аптечке.</p><button className="primary-button" onClick={onAdd}>Добавить препарат</button></div>}</section>; }
+function Cabinet({ cabinetName, medications, packagesByMedication, onAdd, onAddPackage, onOpen }: { cabinetName: string; medications: Medication[]; packagesByMedication: Map<string, Package[]>; onAdd: () => void; onAddPackage: (medication: Medication) => void; onOpen: (medication: Medication) => void }) {
+  const [query, setQuery] = useState('');
+  const currentDate = dateKey(today());
+  const normalizedQuery = query.trim().toLocaleLowerCase('ru-RU');
+  const filteredMedications = normalizedQuery ? medications.filter((item) => `${item.name} ${item.form}`.toLocaleLowerCase('ru-RU').includes(normalizedQuery)) : medications;
+  return <section className="cabinet-screen"><label className="cabinet-search"><span aria-hidden="true">⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск препарата в аптечке" aria-label="Поиск препарата в аптечке" /></label><p className="medication-count">{normalizedQuery ? `Найдено · ${filteredMedications.length}` : `Все препараты · ${cabinetName}`}</p>{medications.length ? filteredMedications.length ? filteredMedications.map((medication) => { const packs = packagesByMedication.get(medication.id) ?? []; const available = packs.filter((item) => !item.expires_on || item.expires_on >= currentDate); const stock = available.reduce((total, item) => total + Number(item.quantity_remaining), 0); const nextExpiry = available.filter((item) => item.expires_on).map((item) => item.expires_on!).sort()[0]; const expiredCount = packs.filter((item) => item.expires_on && item.expires_on < currentDate && Number(item.quantity_remaining) > 0).length; return <article key={medication.id} className="cabinet-card"><span className="med-icon" style={{ background: medication.color }}>◉</span><div><h2>{medication.name}</h2><p>{medication.form} · {medication.amount} {medication.unit}</p><strong>В запасе: {stock} {packs[0]?.unit ?? 'шт.'}</strong>{nextExpiry ? <small>Ближайший срок: {new Date(`${nextExpiry}T12:00:00`).toLocaleDateString('ru-RU')}</small> : null}{expiredCount ? <small className="expired-note">Просрочено упаковок: {expiredCount}</small> : null}<div className="cabinet-actions"><button onClick={() => onOpen(medication)}>Открыть карточку ›</button><button onClick={() => onAddPackage(medication)}>＋ Упаковка</button></div></div></article>; }) : <div className="cabinet-no-results"><h2>Ничего не найдено</h2><p>Проверьте название или очистите поиск.</p></div> : <div className="empty"><div className="empty-icon">＋</div><h2>Аптечка пуста</h2><p>Добавьте первый препарат — он будет учитываться отдельно в этой аптечке.</p><button className="primary-button" onClick={onAdd}>Добавить препарат</button></div>}</section>;
+}
+
+function CabinetEmpty({ onCreate }: { onCreate: () => void }) { return <section className="empty cabinet-empty"><div className="empty-icon">⌂</div><h2>Создайте первую аптечку</h2><p>Например, «Домашняя», «Дача» или «В поездке». Препараты и запасы будут храниться отдельно.</p><button className="primary-button" onClick={onCreate}>Создать аптечку</button></section>; }
+
+function CabinetPicker({ cabinets, medications, selectedId, onClose, onSelect, onCreate }: { cabinets: Cabinet[]; medications: Medication[]; selectedId: string | null; onClose: () => void; onSelect: (id: string) => void; onCreate: () => void }) { return <div className="modal-backdrop"><section className="cabinet-picker" role="dialog" aria-modal="true" aria-labelledby="cabinet-picker-title"><div className="modal-handle" /><header className="sheet-header"><button className="close" onClick={onClose} aria-label="Закрыть">×</button><b>Мои аптечки</b><span /></header><h2 id="cabinet-picker-title">Сменить аптечку</h2><div className="cabinet-picker-list">{cabinets.map((cabinet) => { const count = medications.filter((medication) => medication.cabinet_id === cabinet.id).length; const active = cabinet.id === selectedId; return <button className={active ? 'cabinet-choice active' : 'cabinet-choice'} key={cabinet.id} onClick={() => onSelect(cabinet.id)}><span><strong>{cabinet.name}</strong><small>{count} {count === 1 ? 'препарат' : count >= 2 && count <= 4 ? 'препарата' : 'препаратов'}</small></span><i aria-hidden="true" /></button>; })}</div><button className="cabinet-create-button" onClick={onCreate}>＋ Добавить новую</button></section></div>; }
+
+function CabinetEditor({ cabinet, onClose, onSave }: { cabinet: Cabinet | null; onClose: () => void; onSave: (name: string) => Promise<void> }) { const [name, setName] = useState(cabinet?.name ?? ''); const [error, setError] = useState<string | null>(null); const [saving, setSaving] = useState(false); const title = cabinet ? 'Переименовать аптечку' : 'Новая аптечка'; const save = () => { if (saving) return; setSaving(true); setError(null); void onSave(name).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Не удалось сохранить аптечку.')).finally(() => setSaving(false)); }; return <div className="modal-backdrop"><section className="cabinet-editor" role="dialog" aria-modal="true" aria-labelledby="cabinet-editor-title"><div className="modal-handle" /><header className="sheet-header"><button className="close" disabled={saving} onClick={onClose} aria-label="Закрыть">×</button><b>{cabinet ? 'Настройки аптечки' : 'Новая аптечка'}</b><span /></header><h2 id="cabinet-editor-title">{title}</h2><label>Название аптечки<input value={name} maxLength={60} onChange={(event) => { setName(event.target.value); setError(null); }} placeholder="Например, Домашняя" autoFocus /></label>{error ? <p className="flow-validation" role="alert">{error}</p> : null}<footer><button className="secondary-button" disabled={saving} onClick={onClose}>Отмена</button><button className="primary-button" disabled={saving || !name.trim()} onClick={save}>{saving ? 'Сохраняем…' : 'Сохранить'}</button></footer></section></div>; }
 
 function AddMedication({ onClose, onSubmit }: { onClose: () => void; onSubmit: (draft: MedicationDraft, operationId: string) => Promise<void> }) {
   const [screen, setScreen] = useState<1 | 2 | 3>(1);
