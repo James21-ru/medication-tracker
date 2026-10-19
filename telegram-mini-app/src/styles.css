@@ -157,3 +157,130 @@
 @media (min-width: 760px) {
   .cabinet-picker, .cabinet-editor { min-height: 560px; border-radius: 34px; margin: auto; }
 }
+
+/* Six-step medicine entry: one task per screen, fixed action area and a scrollable body. */
+.medicine-flow {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 560px);
+  min-height: calc(100dvh - 12px);
+  max-height: calc(100dvh - 12px);
+  margin: 12px auto 0;
+  overflow: hidden;
+  border-radius: 34px 34px 0 0;
+  background: #fff;
+}
+.medicine-flow__header {
+  display: grid;
+  grid-template-columns: 42px 1fr 42px;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 14px 28px 11px;
+  color: #7a8491;
+  text-align: center;
+}
+.medicine-flow__header > b { font-size: 15px; }
+.medicine-flow__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 17px 28px 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.medicine-flow__content h2 {
+  max-width: 450px;
+  margin: 13px 0 27px;
+  color: #1b2028;
+  font-size: clamp(30px, 8.5vw, 40px);
+  line-height: 1.08;
+  letter-spacing: -1.5px;
+}
+.medicine-flow__content > label {
+  display: grid;
+  gap: 9px;
+  color: #303741;
+  font-size: 15px;
+  font-weight: 800;
+}
+.medicine-flow__content label > span { color: #8b95a2; font-size: 13px; font-weight: 600; }
+.medicine-flow__content input,
+.medicine-flow__content textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid #d7dee7;
+  border-radius: 18px;
+  outline-color: #1688f7;
+  color: #222933;
+  background: #fff;
+  font: inherit;
+}
+.medicine-flow__content input { min-height: 60px; padding: 0 17px; font-size: 17px; }
+.medicine-flow__content textarea { min-height: 154px; padding: 16px 17px; resize: vertical; font-size: 16px; line-height: 1.45; }
+.medicine-flow__content input::placeholder,
+.medicine-flow__content textarea::placeholder { color: #929ba7; }
+.medicine-flow__hint { margin: 0 0 12px; color: #596370; font-size: 15px; font-weight: 800; }
+.medicine-flow__hint:not(:first-of-type) { margin-top: 25px; }
+.medicine-flow__description { margin: -14px 0 27px; color: #65707d; font-size: 15px; line-height: 1.45; }
+.medicine-choice-list { display: grid; gap: 8px; }
+.medicine-choice-list button {
+  min-height: 51px;
+  padding: 10px 15px;
+  border: 1px solid #cfd7e0;
+  border-radius: 15px;
+  color: #303741;
+  background: #fff;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 750;
+  transition: border-color .16s ease, background-color .16s ease, color .16s ease;
+}
+.medicine-choice-list button.selected { border-color: #1688f7; color: #087bf2; background: #f3f9ff; box-shadow: inset 0 0 0 1px rgba(22,136,247,.1); }
+.medicine-choice-list--units { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.medicine-choice-list--units button { text-align: center; }
+.medicine-choice-list + label { margin-top: 20px; }
+.purchase-toggle {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 62px;
+  margin-top: 25px;
+  padding: 0 3px;
+}
+.purchase-toggle input {
+  appearance: none;
+  flex: 0 0 52px;
+  width: 52px !important;
+  min-height: 32px !important;
+  height: 32px;
+  padding: 0 !important;
+  border-radius: 18px !important;
+  background: #dce2e8 !important;
+  cursor: pointer;
+  transition: background-color .16s ease;
+}
+.purchase-toggle input::after {
+  display: block;
+  width: 26px;
+  height: 26px;
+  margin: 2px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(31, 43, 59, .23);
+  content: '';
+  transition: transform .16s ease;
+}
+.purchase-toggle input:checked { border-color: #1688f7; background: #1688f7 !important; }
+.purchase-toggle input:checked::after { transform: translateX(20px); }
+.medicine-flow__footer {
+  flex: 0 0 auto;
+  padding: 12px 28px calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid #edf0f3;
+  background: rgba(255,255,255,.96);
+}
+.medicine-flow__footer .primary-button { width: 100%; min-height: 56px; }
+.medicine-flow__footer .primary-button:disabled { color: #fff; background: #bdc8d5; }
+.medicine-skip { display: block; width: 100%; min-height: 38px; margin-top: 5px; color: #637080; background: transparent; font-size: 14px; font-weight: 800; }
+@media (min-width: 760px) {
+  .medicine-flow { min-height: 600px; max-height: calc(100dvh - 56px); margin: auto; border-radius: 34px; }
+}
