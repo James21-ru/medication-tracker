@@ -42,6 +42,11 @@ export function App() {
   async function signInAndLoad() {
     const app = prepareTelegramApp();
     if (!supabase) { setMessage('Mini App пока не настроен: добавьте Supabase URL и publishable key в окружение хостинга.'); setLoading(false); return; }
+    // A valid Supabase session is already bound to the Telegram identity at
+    // first sign-in. Reuse it while it is fresh instead of creating a new
+    // one-time link and a database connection on every Mini App opening.
+    const existingSession = await supabase.auth.getSession();
+    if (existingSession.data.session && (existingSession.data.session.expires_at ?? 0) > Math.floor(Date.now() / 1000) + 60) { await loadData(selectedDate); return; }
     if (!app?.initData) { setMessage('Откройте LifeCare из Telegram, чтобы безопасно войти и увидеть свои данные.'); setLoading(false); return; }
     // Never trust a persisted browser session by itself: bind every Mini App
     // launch back to the signed Telegram identity before reading its data.
@@ -166,15 +171,18 @@ export function App() {
   }
 
   async function saveCabinet(name: string) {
+    if (!supabase) throw new Error('Сохранение недоступно: Mini App не подключён к Supabase.');
     const normalizedName = name.trim();
     if (!normalizedName) throw new Error('Введите название аптечки.');
     if (cabinetEditor?.mode === 'rename') {
-      await runTelegramMutation({ type: 'rename_cabinet', cabinet_id: cabinetEditor.cabinet.id, name: normalizedName });
+      const { error } = await supabase.from('cabinets').update({ name: normalizedName }).eq('id', cabinetEditor.cabinet.id);
+      if (error) throw new Error('Не удалось сохранить название аптечки. Попробуйте ещё раз.');
       setCabinets((current) => current.map((item) => item.id === cabinetEditor.cabinet.id ? { ...item, name: normalizedName } : item));
       showNotice('Название аптечки изменено.');
     } else {
       const cabinetId = makeId('cabinet');
-      await runTelegramMutation({ type: 'create_cabinet', cabinet_id: cabinetId, name: normalizedName });
+      const { error } = await supabase.from('cabinets').insert({ id: cabinetId, name: normalizedName });
+      if (error) throw new Error('Не удалось создать аптечку. Попробуйте ещё раз.');
       setCabinets((current) => [...current, { id: cabinetId, name: normalizedName }]);
       setSelectedCabinetId(cabinetId);
       showNotice('Новая аптечка создана.');
