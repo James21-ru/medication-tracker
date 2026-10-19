@@ -336,3 +336,107 @@
 .cabinet-card--expired { border: 1px solid #f0d9dc; background: #fffafb; }
 .cabinet-card--expired .expired-note { margin-top: 14px; font-size: 15px; }
 .inventory-empty { min-height: 280px; }
+
+/* Figma mobile foundation. The application is designed for a 402 px wide phone
+   first; desktop is a centred preview and never the source of layout rules. */
+html, body, #root { min-height: 100%; min-height: 100dvh; }
+body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+input:not([type="checkbox"]), select, textarea { font-size: 16px !important; }
+
+.app-shell {
+  width: min(100%, 402px);
+  min-height: 100dvh;
+  padding: calc(26px + env(safe-area-inset-top)) 18px calc(128px + env(safe-area-inset-bottom));
+  background:
+    radial-gradient(circle at 8% 8%, rgba(160, 202, 255, .38), transparent 27%),
+    radial-gradient(circle at 94% 96%, rgba(183, 232, 212, .36), transparent 26%),
+    #eef2f7;
+}
+.header--cabinet { align-items: flex-start; margin: 0 0 24px; }
+.header--cabinet .eyebrow { color: #70747c; font-size: 12px; letter-spacing: 1.25px; }
+.cabinet-heading { min-width: 0; }
+.cabinet-title-row { gap: 8px; }
+.cabinet-title-row h1 { color: #111317; font-size: clamp(35px, 10vw, 40px); font-weight: 800; line-height: 1.05; letter-spacing: -1.13px; }
+.cabinet-edit { flex-basis: 32px; width: 32px; height: 32px; border-radius: 16px; color: #111317; background: rgba(255,255,255,.72); font-size: 18px; }
+.cabinet-summary { margin: 7px 0 0; color: #70747c; font-size: 14px; line-height: 21px; }
+.header--cabinet .round-button { flex: 0 0 52px; width: 52px; height: 52px; margin-top: 13px; border-radius: 26px; font-size: 31px; box-shadow: 0 8px 10px rgba(17,19,23,.15); }
+
+.cabinet-screen { gap: 0; }
+.cabinet-switch-card { display: flex; align-items: center; width: 100%; min-height: 66px; gap: 12px; padding: 10px 13px; border: 1px solid rgba(17,19,23,.08); border-radius: 19px; color: #111317; background: rgba(255,255,255,.82); box-shadow: inset 0 1px 0 rgba(255,255,255,.8); text-align: left; }
+.cabinet-switch-card__icon { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; border-radius: 13px; color: #1677ff; background: #e9f2ff; font-size: 20px; }
+.cabinet-switch-card > span:nth-child(2) { display: grid; gap: 1px; flex: 1; min-width: 0; }
+.cabinet-switch-card small { color: #70747c; font-size: 11px; font-weight: 500; }
+.cabinet-switch-card strong { overflow: hidden; color: #111317; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 700; }
+.cabinet-switch-card > b { color: #70747c; font-size: 19px; font-weight: 500; }
+.cabinet-search { min-height: 50px; margin-top: 12px; padding: 0 14px; border-color: rgba(17,19,23,.08); border-radius: 17px; color: #70747c; background: rgba(255,255,255,.74); }
+.cabinet-search > span { font-size: 23px; }
+.cabinet-search input { font-size: 16px !important; font-weight: 400; }
+.inventory-tabs { gap: 3px; margin-top: 18px; padding: 3px; border-radius: 15px; background: #e5e7eb; }
+.inventory-tabs button { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; border-radius: 12px; color: #676b72; font-size: 14px; font-weight: 600; }
+.inventory-tabs button.active { color: #111317; box-shadow: 0 2px 4px rgba(17,19,23,.08); }
+.inventory-tabs button.active.expired { color: #bb5161; }
+.inventory-tabs i { display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 4px; border-radius: 10px; color: #1677ff; background: #e9f2ff; font-size: 11px; font-style: normal; }
+.medication-count { display: flex; align-items: baseline; justify-content: space-between; margin: 24px 2px 0; color: #111317; }
+.medication-count strong { font-size: 17px; letter-spacing: -.43px; }
+.medication-count span { color: #70747c; font-size: 13px; }
+.cabinet-card { gap: 14px; min-height: 190px; margin-top: 11px; padding: 18px 16px 16px; border: 1px solid rgba(17,19,23,.05); border-radius: 24px; box-shadow: 0 10px 15px rgba(26,31,39,.05); }
+.med-icon { flex-basis: 46px; width: 46px; height: 46px; border-radius: 15px; color: #16a177; background: #e2f6ef !important; font-size: 25px; }
+.cabinet-card__title { display: flex; justify-content: space-between; gap: 8px; }
+.cabinet-card h2 { overflow: hidden; color: #111317; text-overflow: ellipsis; white-space: nowrap; font-size: 19px; font-weight: 500; letter-spacing: -.8px; }
+.cabinet-card p { margin-top: 3px; color: #70747c; font-size: 14px; }
+.cabinet-card__title > button { width: 30px; height: 30px; padding: 0; color: #70747c; background: transparent; font-size: 13px; letter-spacing: 1px; }
+.cabinet-card strong { margin-top: 16px; color: #157d60; font-size: 14px; }
+.cabinet-card small { display: block; margin-top: 8px; color: #70747c; font-size: 12px; }
+.cabinet-actions { gap: 12px; margin-top: 9px; }
+.cabinet-actions button { min-height: 36px; color: #1677ff; font-size: 14px; font-weight: 650; }
+.cabinet-actions span { margin-left: 2px; font-size: 19px; vertical-align: -1px; }
+.cabinet-card--expired { border-color: #f0d9dc; background: #fffafb; }
+.cabinet-card--expired .expired-note { color: #b45a5a; }
+
+/* Every sheet has one viewport-bounded surface. Content scrolls inside it;
+   the page behind never scrolls or pushes the modal upward with the keyboard. */
+.modal-backdrop { align-items: flex-end; padding-top: env(safe-area-inset-top); overflow: hidden; overscroll-behavior: none; touch-action: auto; }
+.medicine-flow, .cabinet-picker, .cabinet-editor, .package-sheet, .details-sheet, .medication-editor, .delete-confirm, .pharmacy-sheet, .choice-sheet, .flow-sheet {
+  width: min(100%, 402px);
+  max-height: calc(100dvh - env(safe-area-inset-top));
+  margin: 0 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.medicine-flow { min-height: 0; height: min(100dvh - env(safe-area-inset-top), 875px); border-radius: 28px 28px 0 0; }
+.medicine-flow__content { padding-right: 18px; padding-left: 18px; }
+.medicine-flow__header { padding-right: 18px; padding-left: 18px; }
+.medicine-flow__footer { padding-right: 18px; padding-left: 18px; }
+.cabinet-picker, .cabinet-editor, .package-sheet, .details-sheet, .medication-editor, .delete-confirm, .pharmacy-sheet, .choice-sheet, .flow-sheet { border-radius: 28px 28px 0 0; }
+
+/* Figma TabBar: 366 × 68 in the reference 402 px frame. */
+.tabbar { bottom: max(16px, env(safe-area-inset-bottom)); width: min(calc(100% - 36px), 366px); min-height: 68px; padding: 5px; gap: 0; border-color: rgba(255,255,255,.9); border-radius: 24px; background: rgba(248,249,251,.88); box-shadow: 0 12px 35px rgba(33,42,54,.14); }
+.tab { min-height: 57px; gap: 4px; padding: 5px 0; border-radius: 19px; color: #6f737a; font-size: 11px; font-weight: 600; }
+.tab span { width: 21px; height: 21px; border: 0; background: transparent; box-shadow: none; font-size: 21px; }
+.tab.active { color: #1677ff; background: rgba(255,255,255,.84); box-shadow: 0 2px 10px rgba(20,26,35,.07); }
+.tab.active span { border: 0; background: transparent; box-shadow: none; }
+
+@media (min-width: 760px) {
+  .app-shell { width: min(calc(100% - 48px), 402px); margin-top: 24px; margin-bottom: 24px; border-radius: 30px; box-shadow: 0 18px 55px rgba(34,50,72,.15); }
+  .cabinet-screen { display: grid; grid-template-columns: 1fr; }
+  .tabbar { bottom: 32px; }
+}
+
+/* Rename sheet — node 33:2175. */
+.cabinet-editor { gap: 0; min-height: 0; padding: 10px 0 26px; background: #f8f8fa; box-shadow: 0 -12px 25px rgba(0,0,0,.12); }
+.cabinet-editor > .modal-handle { width: 38px; height: 5px; margin: 0 auto; background: #d8d9dd; }
+.cabinet-editor .sheet-header { grid-template-columns: 48px 1fr 48px; height: 52px; padding: 4px 18px 8px; }
+.cabinet-editor .sheet-header > b { color: #111317; font-size: 15px; }
+.cabinet-editor .close { width: 40px; height: 40px; border-radius: 20px; color: #111317; background: #e9eaed; font-size: 29px; }
+.cabinet-editor__form { display: flex; flex: 1; flex-direction: column; min-height: 420px; padding: 18px; }
+.cabinet-editor__eyebrow { margin: 0; color: #1677ff; font-size: 12px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; }
+.cabinet-editor h2 { margin: 7px 0 0; color: #111317; font-size: 28px; font-weight: 500; line-height: 42px; letter-spacing: -.42px; }
+.cabinet-editor__description { max-width: 367px; margin: 8px 0 0; color: #70747c; font-size: 14px; line-height: 20px; }
+.cabinet-editor label { gap: 8px; margin-top: 30px; color: #111317; font-size: 13px; font-weight: 650; }
+.cabinet-editor input { height: 56px; padding: 0 16px; border-color: #d9dbe0; border-radius: 17px; color: #111317; background: #fff; font-size: 16px !important; font-weight: 400; }
+.cabinet-editor footer { grid-template-columns: minmax(0, .67fr) minmax(0, 1fr); gap: 10px; margin-top: auto; }
+.cabinet-editor footer .secondary-button, .cabinet-editor footer .primary-button { min-height: 52px; border-radius: 17px; font-size: 15px; }
+.cabinet-editor footer .secondary-button { border: 0; color: #1677ff; background: #e9f2ff; }
+.cabinet-editor footer .primary-button { box-shadow: 0 10px 11px rgba(22,119,255,.2); }
