@@ -396,7 +396,7 @@ input:not([type="checkbox"]), select, textarea { font-size: 16px !important; }
 
 /* Every sheet has one viewport-bounded surface. Content scrolls inside it;
    the page behind never scrolls or pushes the modal upward with the keyboard. */
-.modal-backdrop { align-items: flex-end; padding-top: env(safe-area-inset-top); overflow: hidden; overscroll-behavior: none; touch-action: auto; }
+.modal-backdrop { z-index: 50; align-items: flex-end; padding-top: env(safe-area-inset-top); overflow: hidden; overscroll-behavior: none; touch-action: auto; }
 .medicine-flow, .cabinet-picker, .cabinet-editor, .package-sheet, .details-sheet, .medication-editor, .delete-confirm, .pharmacy-sheet, .choice-sheet, .flow-sheet {
   width: min(100%, 402px);
   max-height: calc(100dvh - env(safe-area-inset-top));
@@ -411,9 +411,23 @@ input:not([type="checkbox"]), select, textarea { font-size: 16px !important; }
 .medicine-flow__footer { padding-right: 18px; padding-left: 18px; }
 .cabinet-picker, .cabinet-editor, .package-sheet, .details-sheet, .medication-editor, .delete-confirm, .pharmacy-sheet, .choice-sheet, .flow-sheet { border-radius: 28px 28px 0 0; }
 
+/* Compact add-medicine sheet, aligned with the approved mobile pattern. */
+.medicine-flow--figma { background: #f8f8fa; box-shadow: 0 -12px 25px rgba(0,0,0,.12); }
+.medicine-flow--figma .medicine-flow__header { padding-top: 18px; padding-bottom: 8px; }
+.medicine-flow--figma .medicine-flow__header > b { color: #70747c; font-size: 15px; font-weight: 650; }
+.medicine-flow--figma .medicine-flow__content { padding-top: 22px; }
+.medicine-flow--figma .medicine-flow__eyebrow { margin: 0; color: #1677ff; font-size: 12px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; }
+.medicine-flow--figma .medicine-flow__content h2 { margin: 7px 0 0; color: #111317; font-size: 28px; font-weight: 500; line-height: 42px; letter-spacing: -.42px; }
+.medicine-flow--figma .medicine-flow__description { margin: 8px 0 0; color: #70747c; font-size: 14px; line-height: 20px; }
+.medicine-flow--figma .medicine-flow__content > label { gap: 8px; margin-top: 30px; color: #111317; font-size: 13px; font-weight: 650; }
+.medicine-flow--figma .medicine-flow__content input { min-height: 56px; border-color: #d9dbe0; border-radius: 17px; font-size: 16px !important; }
+.medicine-flow--figma .medicine-flow__footer { padding: 12px 18px calc(18px + env(safe-area-inset-bottom)); border-top: 0; background: #f8f8fa; }
+.medicine-flow--figma .medicine-flow__footer .primary-button { min-height: 52px; border-radius: 17px; font-size: 15px; box-shadow: 0 10px 11px rgba(22,119,255,.2); }
+
 /* Figma TabBar: 366 × 68 in the reference 402 px frame. */
 .tabbar { bottom: max(16px, env(safe-area-inset-bottom)); width: min(calc(100% - 36px), 366px); min-height: 68px; padding: 5px; gap: 0; border-color: rgba(255,255,255,.9); border-radius: 24px; background: rgba(248,249,251,.88); box-shadow: 0 12px 35px rgba(33,42,54,.14); }
 .app-shell > .tabbar { position: fixed; z-index: 30; }
+.app-shell--modal-open > .tabbar { display: none; }
 .tab { min-height: 57px; gap: 4px; padding: 5px 0; border-radius: 19px; color: #6f737a; font-size: 11px; font-weight: 600; }
 .tab span { width: 21px; height: 21px; border: 0; background: transparent; box-shadow: none; font-size: 21px; }
 .tab.active { color: #1677ff; background: rgba(255,255,255,.84); box-shadow: 0 2px 10px rgba(20,26,35,.07); }
