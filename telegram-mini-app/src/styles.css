@@ -15,7 +15,7 @@
 .lifetab-screen { display: grid; gap: 19px; margin-top: -13px; } .device-hero { position: relative; display: grid; place-items: center; height: 315px; overflow: hidden; border-radius: 40px; background: #040506; } .device-shadow { position: absolute; width: 90%; height: 40%; bottom: -10%; border-radius: 50%; background: #162537; filter: blur(28px); } .device { position: relative; width: 82%; height: 116px; border-radius: 7px 7px 26px 26px; background: linear-gradient(180deg, #e6eaee 0 38%, #c5cbd1 40%, #697888 100%); box-shadow: 0 20px 18px rgba(0,0,0,.55); } .device:after { content: ''; position: absolute; top: 42px; left: 0; right: 0; height: 4px; background: #9da7b0; } .device i { position: absolute; left: 47%; top: 52%; color: #40516a; font-size: 35px; font-style: normal; transform: translate(-50%, -50%); } .lifetab-price { display: flex; align-items: end; justify-content: space-between; gap: 10px; } .lifetab-price p { margin: 0 0 6px; color: #71808d; font-size: 11px; font-weight: 800; letter-spacing: 1.3px; } .lifetab-price strong { font-size: 33px; line-height: 1; letter-spacing: -1.2px; } .lifetab-price small { color: #82909c; text-align: right; font-size: 13px; line-height: 1.45; } .lifetab-cta { display: flex; align-items: center; justify-content: center; gap: 18px; min-height: 69px; border-radius: 24px; color: #fff; background: #1688e9; font-size: 18px; font-weight: 800; } .lifetab-cta b { font-size: 30px; font-weight: 400; } .lifetab-note { margin: -8px 0 14px; text-align: center; font-size: 13px; } .lifetab-screen > h2 { font-size: 29px; letter-spacing: -1.5px; } .feature-list { display: grid; gap: 10px; } .feature-list > div { display: flex; gap: 13px; padding: 16px; border-radius: 22px; background: rgba(255,255,255,.75); } .feature-list > div > span { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 15px; color: #1688f7; background: #e1f4ff; font-size: 21px; } .feature-list p { display: grid; gap: 3px; margin: 0; } .feature-list strong { color: #252a32; font-size: 14px; } .feature-list small { font-size: 12px; }
 .tabbar { position: fixed; z-index: 2; bottom: max(14px, env(safe-area-inset-bottom)); left: 50%; display: flex; width: min(calc(100% - 32px), 528px); padding: 6px; border: 1px solid rgba(255,255,255,.74); border-radius: 32px; background: rgba(255,255,255,.86); box-shadow: 0 13px 30px rgba(46, 60, 82, .12); backdrop-filter: blur(22px); transform: translateX(-50%); } .tab { display: grid; flex: 1; gap: 4px; justify-items: center; padding: 9px 2px; border-radius: 24px; color: #1f232a; background: transparent; font-size: 11px; font-weight: 800; } .tab span { height: 21px; font-size: 22px; line-height: 18px; } .tab.active { color: #1688f7; background: #e7ebf0; }
 .modal-backdrop { position: fixed; z-index: 10; inset: 0; display: flex; align-items: end; background: rgba(12, 16, 23, .34); } .modal { display: grid; gap: 13px; width: min(100%, 560px); max-height: 90dvh; margin: 0 auto; padding: 12px 20px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; border-radius: 31px 31px 0 0; background: #fff; } .modal-handle { width: 45px; height: 5px; margin: 0 auto 4px; border-radius: 4px; background: #e0e4e9; } .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; } .modal-header h2 { margin-top: 4px; font-size: 25px; } .close { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; color: #222731; background: #f0f2f5; font-size: 30px; font-weight: 300; } .modal label { display: grid; gap: 7px; color: #313640; font-size: 13px; font-weight: 800; } .modal label span { color: #939aa5; font-weight: 500; } .modal input, .modal select { min-width: 0; height: 50px; padding: 0 14px; border: 0; border-radius: 15px; outline-color: #1688f7; color: #1d222a; background: #f1f2f5; } .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; } .modal .primary-button { margin-top: 5px; }
-@media (min-width: 680px) { body { background: #e6ebf4; } .app-shell { box-shadow: 0 0 50px rgba(35, 48, 70, .1); } .tabbar { bottom: 22px; } }
+@media (min-width: 680px) { body { background: #f3f4f6; } .app-shell { box-shadow: 0 0 50px rgba(35, 48, 70, .1); } .tabbar { bottom: 22px; } }
 
 /* Native LifeCare calendar and pharmacy-entry flow */
 .round-button { width: 54px; height: 54px; font-size: 33px; }
@@ -100,7 +100,7 @@
 
 /* Desktop uses the available window without stretching individual controls beyond a readable size. */
 @media (min-width: 760px) {
-  body { background: #e8edf5; }
+  body { background: #f3f4f6; }
   .app-shell { width: min(calc(100% - 64px), 1180px); padding: 38px 40px 118px; }
   .header { margin: 4px 0 30px; }
   .header h1 { font-size: clamp(40px, 4vw, 52px); }
@@ -348,10 +348,7 @@ input:not([type="checkbox"]), select, textarea { font-size: 16px !important; }
   width: min(100%, 402px);
   min-height: 100dvh;
   padding: calc(26px + env(safe-area-inset-top)) 18px calc(128px + env(safe-area-inset-bottom));
-  background:
-    radial-gradient(circle at 8% 8%, rgba(160, 202, 255, .38), transparent 27%),
-    radial-gradient(circle at 94% 96%, rgba(183, 232, 212, .36), transparent 26%),
-    #eef2f7;
+  background: #f3f4f6;
 }
 .header--cabinet { align-items: flex-start; margin: 0 0 24px; }
 .header--cabinet .eyebrow { color: #70747c; font-size: 12px; letter-spacing: 1.25px; }
