@@ -561,3 +561,42 @@ input:not([type="checkbox"]), select, textarea { font-size: 16px !important; }
   .dose-card--figma { padding: 17px; }
   .dose-card__icon { flex-basis: 58px; width: 58px; height: 58px; }
 }
+
+/* A sheet is a self-contained surface: scrolling never propagates to Telegram or the page. */
+.modal-backdrop {
+  height: 100dvh;
+  min-height: 100dvh;
+  padding: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+.modal-backdrop :is(.medicine-flow__content, .reminder-sheet__content, .modal, .details-sheet, .cabinet-picker-list, .cabinet-editor__form, .pharmacy-sheet__content) {
+  overscroll-behavior: contain;
+  touch-action: pan-y pinch-zoom;
+}
+
+/* Time and quantity are independent, labelled fields. This prevents tiny, ambiguous controls on iPhone widths. */
+.reminder-times__row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto !important;
+  align-items: end !important;
+  gap: 8px !important;
+}
+.reminder-times__row:has(button) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto 28px !important; }
+.reminder-times__row > label { display: grid; gap: 5px; min-width: 0; color: #70747c; font-size: 12px; font-weight: 600; }
+.reminder-times__row input { min-width: 0; min-height: 52px; padding: 0 11px; color: #111317; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; font-size: 17px !important; font-weight: 500; letter-spacing: -.2px; }
+.reminder-times__unit { align-self: center; padding-bottom: 5px; color: #4f5661 !important; font-size: 14px !important; font-weight: 650; white-space: nowrap; }
+
+@media (max-width: 759px) {
+  .modal-backdrop > :is(.medicine-flow, .reminder-sheet, .cabinet-picker, .cabinet-editor, .package-sheet, .details-sheet, .medication-editor, .delete-confirm, .pharmacy-sheet, .choice-sheet, .flow-sheet) {
+    width: 100%;
+    min-height: 0;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0 auto;
+    border-radius: 28px 28px 0 0;
+  }
+  .medicine-flow__header, .reminder-sheet .sheet-header { padding-top: max(8px, env(safe-area-inset-top)); }
+  .medicine-flow__content, .reminder-sheet__content { padding-bottom: 24px; }
+  .medicine-flow__footer, .reminder-flow__footer { padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+}
