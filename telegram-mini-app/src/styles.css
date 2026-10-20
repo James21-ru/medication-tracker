@@ -584,8 +584,36 @@ input:not([type="checkbox"]), select, textarea { font-size: 16px !important; }
 .reminder-times__row input { min-width: 0; min-height: 52px; padding: 0 11px; color: #111317; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; font-size: 17px !important; font-weight: 500; letter-spacing: -.2px; }
 .reminder-times__unit { align-self: center; padding-bottom: 5px; color: #4f5661 !important; font-size: 14px !important; font-weight: 650; white-space: nowrap; }
 
+/* Barcode scanner: a separate, self-contained camera sheet. */
+.barcode-scan-button { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; min-height: 52px; margin-top: 12px; border: 1px solid #b9dcff; border-radius: 17px; color: #1677ff; background: #eef7ff; font-size: 15px; font-weight: 650; }
+.barcode-scan-button span { display: inline-grid; place-items: center; width: 22px; height: 22px; overflow: hidden; color: #1677ff; font-size: 26px; line-height: 1; transform: rotate(90deg); }
+.barcode-value { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; margin-top: 12px; padding: 0 13px; border-radius: 14px; color: #4f5661; background: #eef1f5; font-size: 13px; }
+.barcode-value b { color: #111317; font-weight: 650; }
+.barcode-value button { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: #70747c; background: #fff; font-size: 20px; }
+.barcode-notice { margin: 9px 0 0; color: #157d60; font-size: 13px; font-weight: 600; line-height: 18px; }
+.barcode-scanner-backdrop { z-index: 80; }
+.barcode-scanner { display: flex; flex-direction: column; width: min(100%, 402px); min-height: min(620px, 100dvh); max-height: 100dvh; margin: 0 auto; overflow: hidden; border-radius: 28px 28px 0 0; background: #f8f8fa; box-shadow: 0 -12px 25px rgba(0,0,0,.12); }
+.barcode-scanner > .modal-handle { flex: 0 0 auto; width: 38px; height: 5px; margin: 10px auto 0; border-radius: 4px; background: #d8d9dd; }
+.barcode-scanner .sheet-header { grid-template-columns: 48px 1fr 48px; min-height: 54px; padding: 4px 18px 8px; }
+.barcode-scanner .sheet-header > b { color: #111317; font-size: 15px; font-weight: 650; }
+.barcode-scanner .close { width: 40px; height: 40px; border-radius: 20px; color: #111317; background: #e9eaed; font-size: 29px; }
+.barcode-scanner__content { flex: 1 1 auto; min-height: 0; padding: 18px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.barcode-scanner__content h2 { margin: 7px 0 0; color: #111317; font-size: 28px; font-weight: 500; line-height: 1.25; letter-spacing: -.42px; }
+.barcode-scanner__content > p { margin: 9px 0 0; color: #70747c; font-size: 14px; line-height: 20px; }
+.barcode-scanner__camera { position: relative; display: grid; place-items: center; width: 100%; min-height: 238px; margin-top: 25px; overflow: hidden; border-radius: 22px; background: #111317; }
+.barcode-scanner__camera video { width: 100%; height: 100%; min-height: 238px; object-fit: cover; }
+.barcode-scanner__frame { position: absolute; width: calc(100% - 64px); height: 104px; border: 2px solid #fff; border-radius: 14px; box-shadow: 0 0 0 200vmax rgba(0,0,0,.12); pointer-events: none; }
+.barcode-scanner__status { position: absolute; padding: 9px 12px; border-radius: 12px; color: #fff; background: rgba(17,19,23,.72); font-size: 13px; font-weight: 650; }
+.barcode-scanner__status--error { color: #ffdde2; }
+.barcode-scanner__manual { display: grid; gap: 10px; margin-top: 20px; padding: 16px; border-radius: 18px; background: #eef1f5; }
+.barcode-scanner__manual strong { color: #111317; font-size: 15px; font-weight: 650; }
+.barcode-scanner__manual label { display: grid; gap: 7px; color: #4f5661; font-size: 13px; font-weight: 650; }
+.barcode-scanner__manual input { width: 100%; min-height: 52px; padding: 0 13px; border: 1px solid #d9dbe0; border-radius: 14px; outline-color: #1677ff; color: #111317; background: #fff; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; font-size: 17px !important; font-weight: 500; }
+.barcode-scanner__manual .secondary-button { min-height: 48px; border: 1px solid #b9dcff; border-radius: 14px; color: #1677ff; background: #fff; font-size: 14px; font-weight: 650; }
+.details-barcode { margin: 12px 0 0; color: #70747c; font-size: 13px; font-variant-numeric: tabular-nums; }
+
 @media (max-width: 759px) {
-  .modal-backdrop > :is(.medicine-flow, .reminder-sheet, .cabinet-picker, .cabinet-editor, .package-sheet, .details-sheet, .medication-editor, .delete-confirm, .pharmacy-sheet, .choice-sheet, .flow-sheet) {
+  .modal-backdrop > :is(.medicine-flow, .reminder-sheet, .cabinet-picker, .cabinet-editor, .package-sheet, .details-sheet, .medication-editor, .delete-confirm, .pharmacy-sheet, .choice-sheet, .flow-sheet, .barcode-scanner) {
     width: 100%;
     min-height: 0;
     height: 100dvh;
@@ -594,6 +622,6 @@ input:not([type="checkbox"]), select, textarea { font-size: 16px !important; }
     border-radius: 28px 28px 0 0;
   }
   .medicine-flow__header, .reminder-sheet .sheet-header { padding-top: max(8px, env(safe-area-inset-top)); }
-  .medicine-flow__content, .reminder-sheet__content { padding-bottom: 24px; }
+  .medicine-flow__content, .reminder-sheet__content, .barcode-scanner__content { padding-bottom: 24px; }
   .medicine-flow__footer, .reminder-flow__footer { padding-bottom: max(18px, env(safe-area-inset-bottom)); }
 }

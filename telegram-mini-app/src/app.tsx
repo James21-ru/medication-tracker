@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 type Tab = 'doses' | 'cabinet';
 type Cabinet = { id: string; name: string };
-type Medication = { id: string; cabinet_id: string; name: string; category?: string; form: string; amount: string; unit: string; note?: string; purchase_reminder?: boolean; color: string };
+type Medication = { id: string; cabinet_id: string; name: string; category?: string; form: string; amount: string; unit: string; barcode?: string; note?: string; purchase_reminder?: boolean; color: string };
 type Package = { id: string; medication_id: string; quantity_remaining: number; unit: string; expires_on: string | null };
 type Dose = { id: string; medication_id: string; scheduled_time: string; scheduled_date?: string; quantity: number; unit: string; status: 'pending' | 'taken' | 'skipped' };
 type ReminderFrequency = 'daily' | 'multiple' | 'weekdays' | 'interval' | 'as-needed';
 type MedicationSchedule = { id: string; medication_id: string; scheduled_time: string; dose_quantity: number; dose_unit: string; frequency?: ReminderFrequency; start_date?: string; end_date?: string | null; weekdays?: number[]; interval_days?: number };
 type ScheduleDraft = { time: string; quantity: string };
-type MedicationDraft = { name: string; category: string; customCategory: string; form: string; amount: string; unit: string; quantity: string; expiresOn: string; note: string; purchaseReminder: boolean; schedules: ScheduleDraft[] };
+type MedicationDraft = { name: string; barcode: string; category: string; customCategory: string; form: string; amount: string; unit: string; quantity: string; expiresOn: string; note: string; purchaseReminder: boolean; schedules: ScheduleDraft[] };
 type ReminderDraft = { cabinetId: string; medicationId: string; frequency: ReminderFrequency; times: ScheduleDraft[]; startDate: string; endDate: string; weekdays: number[]; intervalDays: string; note: string; purchaseReminder: boolean };
 type PharmacyOffer = { id: string; name: string; price: string; address: string; distance: string; pickup: string; stock: string };
 type LocalData = { cabinets: Cabinet[]; medications: Medication[]; packages: Package[]; doses: Dose[]; schedules: MedicationSchedule[] };
@@ -16,7 +16,7 @@ type LocalData = { cabinets: Cabinet[]; medications: Medication[]; packages: Pac
 const today = () => new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
 const dateKey = (date: Date) => new Intl.DateTimeFormat('en-CA').format(date);
 const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-const blankDraft: MedicationDraft = { name: '', category: '', customCategory: '', form: 'Таблетка', amount: '', unit: 'мг', quantity: '', expiresOn: '', note: '', purchaseReminder: false, schedules: [] };
+const blankDraft: MedicationDraft = { name: '', barcode: '', category: '', customCategory: '', form: 'Таблетка', amount: '', unit: 'мг', quantity: '', expiresOn: '', note: '', purchaseReminder: false, schedules: [] };
 const medicationCategories = ['От боли и температуры', 'Простуда, горло и кашель', 'Аллергия', 'Желудок и кишечник', 'Сердце и давление', 'Нервы и сон', 'Глаза, уши, нос', 'Кожа, раны и антисептики', 'Витамины и минералы', 'Противовирусные и антибиотики', 'Гормональные препараты', 'Диабет и обмен веществ', 'Суставы, мышцы и спина', 'Женское здоровье', 'Детская аптечка', 'Своя категория'];
 const medicationDescription = (medication: Medication) => medication.amount ? `${medication.form} · ${medication.amount} ${medication.unit}` : medication.form;
 const formatExpirationInput = (value: string) => {
@@ -147,7 +147,7 @@ export function App() {
     const stockUnit = ['Жидкость', 'Капли', 'Сироп'].includes(draft.form) ? 'мл' : 'шт.';
     const medicationId = `${operationId}-medication`;
     const packageId = `${operationId}-package`;
-    setMedications((current) => [{ id: medicationId, cabinet_id: selectedCabinetId, name: draft.name.trim(), category: draft.category === 'Своя категория' ? draft.customCategory.trim() : draft.category, form: draft.form, amount: draft.amount.trim(), unit: draft.unit, note: draft.note.trim(), purchase_reminder: draft.purchaseReminder, color: '#20A278' }, ...current]);
+    setMedications((current) => [{ id: medicationId, cabinet_id: selectedCabinetId, name: draft.name.trim(), barcode: draft.barcode || undefined, category: draft.category === 'Своя категория' ? draft.customCategory.trim() : draft.category, form: draft.form, amount: draft.amount.trim(), unit: draft.unit, note: draft.note.trim(), purchase_reminder: draft.purchaseReminder, color: '#20A278' }, ...current]);
     setPackages((current) => [{ id: packageId, medication_id: medicationId, quantity_remaining: quantity, unit: stockUnit, expires_on: expirationDateKey(draft.expiresOn) }, ...current]);
     setSchedules((current) => [...scheduleEntries.map((schedule) => ({ id: schedule.id, medication_id: medicationId, scheduled_time: schedule.time, dose_quantity: schedule.quantity, dose_unit: stockUnit })), ...current]);
     if (dateKey(selectedDate) === dateKey(today())) setDoses((current) => [...current, ...scheduleEntries.map((schedule) => ({ id: `${schedule.id}-dose-${dateKey(today()).replaceAll('-', '')}`, medication_id: medicationId, scheduled_time: schedule.time, quantity: schedule.quantity, unit: stockUnit, status: 'pending' as const }))].sort((left, right) => left.scheduled_time.localeCompare(right.scheduled_time)));
@@ -199,7 +199,7 @@ export function App() {
     if (draft.expiresOn && !expiration) throw new Error('Укажите существующую дату в формате ДД.ММ.ГГГГ.');
     const stockUnit = ['Жидкость', 'Капли', 'Сироп'].includes(draft.form) ? 'мл' : 'шт.';
     const category = draft.category === 'Своя категория' ? draft.customCategory.trim() : draft.category;
-    setMedications((current) => current.map((item) => item.id === medication.id ? { ...item, name: draft.name.trim(), category, form: draft.form, amount: draft.amount.trim(), unit: draft.unit, note: draft.note.trim(), purchase_reminder: draft.purchaseReminder } : item));
+    setMedications((current) => current.map((item) => item.id === medication.id ? { ...item, name: draft.name.trim(), barcode: draft.barcode || undefined, category, form: draft.form, amount: draft.amount.trim(), unit: draft.unit, note: draft.note.trim(), purchase_reminder: draft.purchaseReminder } : item));
     setPackages((current) => {
       const packageIndex = current.findIndex((item) => item.medication_id === medication.id);
       if (packageIndex < 0) return [{ id: makeId('pack'), medication_id: medication.id, quantity_remaining: quantity, unit: stockUnit, expires_on: expiration }, ...current];
@@ -347,6 +347,7 @@ function AddMedication({ onClose, onSubmit, initialDraft = blankDraft, mode = 'c
   const [draft, setDraft] = useState<MedicationDraft>(() => ({ ...initialDraft, schedules: [...initialDraft.schedules] }));
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const operationId = useRef(makeId('create-medication')).current;
   const patch = (values: Partial<MedicationDraft>) => setDraft((current) => ({ ...current, ...values }));
   const validStock = Number(draft.quantity) > 0;
@@ -370,10 +371,10 @@ function AddMedication({ onClose, onSubmit, initialDraft = blankDraft, mode = 'c
   const goBack = () => screen === 1 ? onClose() : setScreen((screen - 1) as 1 | 2 | 3 | 4 | 5 | 6);
   const select = (field: 'category' | 'form' | 'unit', value: string) => { patch({ [field]: value } as Partial<MedicationDraft>); setValidationMessage(null); };
   const title = draft.name || 'Лекарство';
-  return <div className="modal-backdrop"><section className="medicine-flow medicine-flow--figma" role="dialog" aria-modal="true" aria-labelledby="medicine-flow-title">
+  return <><div className="modal-backdrop"><section className="medicine-flow medicine-flow--figma" role="dialog" aria-modal="true" aria-labelledby="medicine-flow-title">
     <header className="medicine-flow__header"><button className="close" disabled={saving} onClick={goBack} aria-label={screen === 1 ? 'Закрыть' : 'Назад'}>{screen === 1 ? '×' : '‹'}</button><b>{screen} из 6</b>{screen === 6 ? <button className="close" disabled={saving} onClick={onClose} aria-label="Закрыть">×</button> : <span />}</header>
     <div className="medicine-flow__content">
-      {screen === 1 ? <><p className="medicine-flow__eyebrow">{mode === 'edit' ? 'Редактирование препарата' : 'Добавление препарата'}</p><h2 id="medicine-flow-title">Название лекарства</h2><p className="medicine-flow__description">Укажите название с упаковки — остальные данные добавим дальше.</p><label>Название препарата<input value={draft.name} onChange={(event) => { patch({ name: event.target.value }); setValidationMessage(null); }} placeholder="Например, Ибупрофен" autoFocus /></label></> : null}
+      {screen === 1 ? <><p className="medicine-flow__eyebrow">{mode === 'edit' ? 'Редактирование препарата' : 'Добавление препарата'}</p><h2 id="medicine-flow-title">Название лекарства</h2><p className="medicine-flow__description">Укажите название с упаковки или отсканируйте штрихкод.</p><label>Название препарата<input value={draft.name} onChange={(event) => { patch({ name: event.target.value }); setValidationMessage(null); }} placeholder="Например, Ибупрофен" autoFocus /></label><button className="barcode-scan-button" type="button" onClick={() => setShowBarcodeScanner(true)}><span aria-hidden="true">▥</span>Сканировать штрихкод</button>{draft.barcode ? <><div className="barcode-value"><span>Штрихкод: <b>{draft.barcode}</b></span><button type="button" onClick={() => patch({ barcode: '' })} aria-label="Удалить штрихкод">×</button></div><p className="barcode-notice">Штрихкод считан. Укажите название препарата с упаковки.</p></> : null}</> : null}
       {screen === 2 ? <><h2 id="medicine-flow-title">Категория лекарства</h2><div className="medicine-choice-list">{medicationCategories.map((category) => <button className={draft.category === category ? 'selected' : ''} key={category} onClick={() => select('category', category)}>{category}</button>)}</div>{draft.category === 'Своя категория' ? <label>Своя категория<input value={draft.customCategory} onChange={(event) => { patch({ customCategory: event.target.value }); setValidationMessage(null); }} placeholder="Например, Для поездки" autoFocus /></label> : null}</> : null}
       {screen === 3 ? <><h2 id="medicine-flow-title">Выберите лекарственную форму</h2><p className="medicine-flow__hint">Основные лекарственные формы</p><div className="medicine-choice-list">{mainForms.map((form) => <button className={draft.form === form ? 'selected' : ''} key={form} onClick={() => select('form', form)}>{form}</button>)}</div><p className="medicine-flow__hint">Другие формы</p><div className="medicine-choice-list">{otherForms.map((form) => <button className={draft.form === form ? 'selected' : ''} key={form} onClick={() => select('form', form)}>{form}</button>)}</div></> : null}
       {screen === 4 ? <><h2 id="medicine-flow-title">Добавление дозировки лекарства</h2><label>Дозировка<input value={draft.amount} onChange={(event) => patch({ amount: event.target.value })} inputMode="decimal" placeholder="Например, 400" autoFocus /></label><p className="medicine-flow__hint">Единицы измерения</p><div className="medicine-choice-list medicine-choice-list--units">{['мг', 'мкг', 'г', 'мл', '%'].map((unit) => <button className={draft.unit === unit ? 'selected' : ''} key={unit} onClick={() => select('unit', unit)}>{unit}</button>)}</div></> : null}
@@ -382,7 +383,46 @@ function AddMedication({ onClose, onSubmit, initialDraft = blankDraft, mode = 'c
       {validationMessage ? <p className="flow-validation" role="alert">{validationMessage}</p> : null}
     </div>
     <footer className="medicine-flow__footer"><button className="primary-button" disabled={saving} onClick={proceed}>{saving ? 'Сохраняем…' : screen === 6 ? mode === 'edit' ? 'Сохранить' : 'Готово' : 'Продолжить'}</button>{screen === 4 ? <button className="medicine-skip" type="button" onClick={proceed}>Пропустить</button> : null}</footer>
-  </section></div>;
+  </section></div>{showBarcodeScanner ? <BarcodeScanner onClose={() => setShowBarcodeScanner(false)} onDetected={(barcode) => { patch({ barcode }); setValidationMessage(null); setShowBarcodeScanner(false); }} /> : null}</>;
+}
+
+function BarcodeScanner({ onClose, onDetected }: { onClose: () => void; onDetected: (barcode: string) => void }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const controlsRef = useRef<{ stop: () => void } | null>(null);
+  const [status, setStatus] = useState<'starting' | 'ready' | 'error'>('starting');
+  const [manualBarcode, setManualBarcode] = useState('');
+  const [error, setError] = useState('');
+  const completedRef = useRef(false);
+  const confirmBarcode = (value: string) => {
+    const normalized = value.replace(/\s/g, '');
+    if (!normalized) { setError('Введите цифры или символы со штрихкода.'); return; }
+    completedRef.current = true;
+    controlsRef.current?.stop();
+    onDetected(normalized);
+  };
+  useEffect(() => {
+    let disposed = false;
+    const start = async () => {
+      try {
+        const { BrowserMultiFormatReader } = await import('@zxing/browser');
+        if (disposed) return;
+        const reader = new BrowserMultiFormatReader();
+        const controls = await reader.decodeFromConstraints({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } }, videoRef.current ?? undefined, (result) => {
+          if (result && !completedRef.current) confirmBarcode(result.getText());
+        });
+        if (disposed) { controls.stop(); return; }
+        controlsRef.current = controls;
+        setStatus('ready');
+      } catch {
+        if (disposed) return;
+        setStatus('error');
+        setError('Не удалось открыть камеру. Проверьте разрешение для камеры в Telegram или введите код вручную.');
+      }
+    };
+    void start();
+    return () => { disposed = true; completedRef.current = true; controlsRef.current?.stop(); };
+  }, []);
+  return <div className="modal-backdrop barcode-scanner-backdrop"><section className="barcode-scanner" role="dialog" aria-modal="true" aria-labelledby="barcode-scanner-title"><div className="modal-handle" /><header className="sheet-header"><button className="close" onClick={onClose} aria-label="Закрыть">×</button><b>Сканирование</b><span /></header><div className="barcode-scanner__content"><h2 id="barcode-scanner-title">Наведите камеру на штрихкод</h2><p>Держите коробку в рамке и избегайте бликов. Считываем EAN, UPC и другие штрихкоды с упаковки.</p><div className="barcode-scanner__camera"><video ref={videoRef} muted playsInline aria-label="Камера для сканирования штрихкода" /><span className="barcode-scanner__frame" aria-hidden="true" />{status === 'starting' ? <span className="barcode-scanner__status">Открываем камеру…</span> : null}{status === 'error' ? <span className="barcode-scanner__status barcode-scanner__status--error">Камера недоступна</span> : null}</div><div className="barcode-scanner__manual"><strong>Не получается отсканировать?</strong><label>Код под штрихкодом<input value={manualBarcode} onChange={(event) => { setManualBarcode(event.target.value); setError(''); }} inputMode="numeric" autoComplete="off" placeholder="Например, 4601234567890" /></label><button type="button" className="secondary-button" onClick={() => confirmBarcode(manualBarcode)}>Использовать введённый код</button></div>{error ? <p className="flow-validation" role="alert">{error}</p> : null}</div></section></div>;
 }
 function AddPackage({ medication, onClose, onSubmit }: { medication: Medication; onClose: () => void; onSubmit: (medication: Medication, quantity: string, expiresOn: string, packageId: string) => Promise<void> }) {
   const [quantity, setQuantity] = useState('');
@@ -403,7 +443,7 @@ function MedicationDetails({ medication, packages, schedules, onClose, onEdit, o
   const currentDate = dateKey(today());
   const unit = packages[0]?.unit ?? (['Жидкость', 'Капли', 'Сироп'].includes(medication.form) ? 'мл' : 'шт.');
   const available = packages.filter((item) => !item.expires_on || item.expires_on >= currentDate).reduce((sum, item) => sum + Number(item.quantity_remaining), 0);
-  return <div className="modal-backdrop"><section className="details-sheet" role="dialog" aria-modal="true" aria-labelledby="medication-details-title"><div className="modal-handle" /><button className="close details-close" onClick={onClose} aria-label="Закрыть карточку">×</button><span className="med-icon details-icon" style={{ background: medication.color }}>◉</span><h2 id="medication-details-title">{medication.name}</h2><p className="details-subtitle">{medicationDescription(medication)}</p>{medication.category ? <p className="details-category">{medication.category}</p> : null}<section className="details-section"><h3>В аптечке</h3><strong>{available} {unit} доступно для приёма</strong>{packages.length ? <div className="package-list">{packages.map((item, index) => { const expired = Boolean(item.expires_on && item.expires_on < currentDate && Number(item.quantity_remaining) > 0); return <article key={item.id} className={expired ? 'package-row expired' : 'package-row'}><b>Упаковка {index + 1}</b><span>Осталось {item.quantity_remaining} {item.unit}{item.expires_on ? ` · до ${new Date(`${item.expires_on}T12:00:00`).toLocaleDateString('ru-RU')}` : ' · срок не указан'}{expired ? ' · просрочена' : ''}</span></article>; })}</div> : <p className="details-empty">Упаковок пока нет.</p>}</section><section className="details-section"><h3>Приём</h3>{schedules.length ? [...schedules].sort((left, right) => left.scheduled_time.localeCompare(right.scheduled_time)).map((schedule) => <p key={schedule.id}>Каждый день в {schedule.scheduled_time.slice(0, 5)} · {schedule.dose_quantity} {schedule.dose_unit}</p>) : <p>Расписание ещё не добавлено.</p>}{medication.note ? <p>Комментарий: {medication.note}</p> : null}</section><div className="details-actions"><button className="primary-button" onClick={onAddPackage}>＋ Добавить упаковку</button><button className="secondary-button" onClick={onOrder}>Найти в аптеках</button><button className="secondary-button" onClick={onEdit}>Редактировать</button><button className="details-delete" onClick={onDelete}>Удалить из аптечки</button></div></section></div>;
+  return <div className="modal-backdrop"><section className="details-sheet" role="dialog" aria-modal="true" aria-labelledby="medication-details-title"><div className="modal-handle" /><button className="close details-close" onClick={onClose} aria-label="Закрыть карточку">×</button><span className="med-icon details-icon" style={{ background: medication.color }}>◉</span><h2 id="medication-details-title">{medication.name}</h2><p className="details-subtitle">{medicationDescription(medication)}</p>{medication.category ? <p className="details-category">{medication.category}</p> : null}<section className="details-section"><h3>В аптечке</h3><strong>{available} {unit} доступно для приёма</strong>{packages.length ? <div className="package-list">{packages.map((item, index) => { const expired = Boolean(item.expires_on && item.expires_on < currentDate && Number(item.quantity_remaining) > 0); return <article key={item.id} className={expired ? 'package-row expired' : 'package-row'}><b>Упаковка {index + 1}</b><span>Осталось {item.quantity_remaining} {item.unit}{item.expires_on ? ` · до ${new Date(`${item.expires_on}T12:00:00`).toLocaleDateString('ru-RU')}` : ' · срок не указан'}{expired ? ' · просрочена' : ''}</span></article>; })}</div> : <p className="details-empty">Упаковок пока нет.</p>}{medication.barcode ? <p className="details-barcode">Штрихкод: {medication.barcode}</p> : null}</section><section className="details-section"><h3>Приём</h3>{schedules.length ? [...schedules].sort((left, right) => left.scheduled_time.localeCompare(right.scheduled_time)).map((schedule) => <p key={schedule.id}>Каждый день в {schedule.scheduled_time.slice(0, 5)} · {schedule.dose_quantity} {schedule.dose_unit}</p>) : <p>Расписание ещё не добавлено.</p>}{medication.note ? <p>Комментарий: {medication.note}</p> : null}</section><div className="details-actions"><button className="primary-button" onClick={onAddPackage}>＋ Добавить упаковку</button><button className="secondary-button" onClick={onOrder}>Найти в аптеках</button><button className="secondary-button" onClick={onEdit}>Редактировать</button><button className="details-delete" onClick={onDelete}>Удалить из аптечки</button></div></section></div>;
 }
 function MedicationEditor({ medication, packages, onClose, onSave }: { medication: Medication; packages: Package[]; onClose: () => void; onSave: (medication: Medication, draft: MedicationDraft) => Promise<void> }) {
   const packageToEdit = packages[0];
@@ -411,6 +451,7 @@ function MedicationEditor({ medication, packages, onClose, onSave }: { medicatio
   const expiresOn = packageToEdit?.expires_on ? packageToEdit.expires_on.split('-').reverse().join('.') : '';
   const initialDraft: MedicationDraft = {
     name: medication.name,
+    barcode: medication.barcode ?? '',
     category: knownCategory ? medication.category ?? '' : 'Своя категория',
     customCategory: knownCategory ? '' : medication.category ?? '',
     form: medication.form,
