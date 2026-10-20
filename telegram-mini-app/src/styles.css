@@ -396,7 +396,7 @@ input:not([type="checkbox"]), select, textarea { font-size: 16px !important; }
 
 /* Every sheet has one viewport-bounded surface. Content scrolls inside it;
    the page behind never scrolls or pushes the modal upward with the keyboard. */
-.modal-backdrop { z-index: 50; align-items: flex-end; padding-top: env(safe-area-inset-top); overflow: hidden; overscroll-behavior: none; touch-action: auto; }
+.modal-backdrop { z-index: 50; align-items: flex-end; padding-top: env(safe-area-inset-top); overflow: hidden; overscroll-behavior: none; touch-action: pan-y; }
 .medicine-flow, .cabinet-picker, .cabinet-editor, .package-sheet, .details-sheet, .medication-editor, .delete-confirm, .pharmacy-sheet, .choice-sheet, .flow-sheet {
   width: min(100%, 402px);
   max-height: calc(100dvh - env(safe-area-inset-top));

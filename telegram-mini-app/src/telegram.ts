@@ -2,6 +2,7 @@ export type TelegramWebApp = {
   initData: string;
   ready: () => void;
   expand: () => void;
+  disableVerticalSwipes?: () => void;
   isExpanded?: boolean;
   onEvent?: (eventType: 'viewportChanged', handler: () => void) => void;
   openLink: (url: string) => void;
@@ -27,6 +28,9 @@ export function prepareTelegramApp() {
   // early as possible, then repeat after the native sheet has measured itself.
   const expand = () => app.expand();
   app.ready();
+  // A swipe inside a scrollable sheet must never be interpreted by Telegram as
+  // a request to dismiss the whole Mini App.
+  app.disableVerticalSwipes?.();
   expand();
   window.requestAnimationFrame(expand);
   window.setTimeout(expand, 120);
