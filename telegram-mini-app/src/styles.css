@@ -489,6 +489,71 @@ input:not([type="checkbox"]), select, textarea { font-size: 16px !important; }
 .doses-empty--figma > span { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; color: #1677ff; background: #e2f2ff; font-size: 42px; }
 .doses-empty--figma h2 { margin: 26px 0 0; color: #111317; font-size: 25px; line-height: 1.15; letter-spacing: -.75px; }
 .doses-empty--figma p { margin: 12px 0 0; color: #8a929e; font-size: 15px; }
+.doses-empty__action { width: 100%; min-height: 52px; margin-top: 32px; border-radius: 17px; font-size: 15px; }
+
+/* Intake/reminder creation follows the same mobile bottom-sheet system as medication entry. */
+.reminder-sheet { display: flex; flex-direction: column; width: min(100%, 402px); min-height: min(620px, calc(100dvh - env(safe-area-inset-top))); max-height: calc(100dvh - env(safe-area-inset-top)); margin: 0 auto; overflow: hidden; border-radius: 28px 28px 0 0; background: #f8f8fa; box-shadow: 0 -12px 25px rgba(0,0,0,.12); }
+.reminder-sheet > .modal-handle { flex: 0 0 auto; width: 38px; height: 5px; margin: 10px auto 0; border-radius: 4px; background: #d8d9dd; }
+.reminder-sheet .sheet-header { grid-template-columns: 48px 1fr 48px; min-height: 54px; padding: 4px 18px 8px; }
+.reminder-sheet .sheet-header > b { color: #111317; font-size: 15px; font-weight: 650; }
+.reminder-sheet .close { width: 40px; height: 40px; border-radius: 20px; color: #111317; background: #e9eaed; font-size: 29px; }
+.reminder-flow .sheet-header > b { color: #70747c; }
+.reminder-flow__close { visibility: visible; }
+.reminder-sheet__content { flex: 1 1 auto; min-height: 0; padding: 18px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.reminder-sheet__content h2 { margin: 7px 0 0; color: #111317; font-size: 28px; font-weight: 500; line-height: 1.25; letter-spacing: -.42px; }
+.reminder-sheet__content > p { margin: 9px 0 0; color: #70747c; font-size: 14px; line-height: 20px; }
+.reminder-sheet__content > label { display: grid; gap: 8px; margin-top: 25px; color: #111317; font-size: 13px; font-weight: 650; }
+.reminder-start { min-height: 480px; }
+.reminder-option { display: grid; gap: 4px; width: 100%; min-height: 78px; margin-top: 13px; padding: 16px; border: 1px solid #d9dbe0; border-radius: 17px; color: #111317; background: #fff; text-align: left; }
+.reminder-option:first-of-type { margin-top: 27px; }
+.reminder-option strong { font-size: 16px; font-weight: 650; }
+.reminder-option span { color: #70747c; font-size: 13px; }
+.reminder-choice-list, .reminder-medication-list, .reminder-frequency-list { display: grid; gap: 10px; margin-top: 24px; }
+.reminder-choice-list button, .reminder-medication-list button, .reminder-frequency-list button { position: relative; width: 100%; border: 1px solid #d9dbe0; border-radius: 17px; color: #111317; background: #fff; text-align: left; }
+.reminder-choice-list button { display: flex; align-items: center; justify-content: space-between; min-height: 84px; padding: 15px; }
+.reminder-choice-list span { display: grid; gap: 5px; }
+.reminder-choice-list strong { font-size: 16px; font-weight: 650; }
+.reminder-choice-list small { color: #70747c; font-size: 13px; }
+.reminder-choice-list i, .reminder-medication-list > button > i { flex: 0 0 21px; width: 21px; height: 21px; border: 1.5px solid #70747c; border-radius: 50%; }
+.reminder-choice-list button.selected, .reminder-medication-list button.selected, .reminder-frequency-list button.selected { border-color: #1677ff; background: #f6faff; box-shadow: inset 0 0 0 1px rgba(22,119,255,.08); }
+.reminder-choice-list button.selected i, .reminder-medication-list button.selected > i { border: 6px solid #75b9ff; }
+.reminder-medication-list button { display: flex; align-items: flex-start; gap: 12px; min-height: 106px; padding: 14px; }
+.reminder-medication-list button > span { display: grid; gap: 4px; min-width: 0; }
+.reminder-medication-list strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; font-weight: 650; }
+.reminder-medication-list small { color: #70747c; font-size: 13px; }
+.reminder-medication-list em { color: #157d60; font-size: 13px; font-style: normal; font-weight: 650; }
+.reminder-caption { margin-top: 22px !important; color: #111317 !important; font-size: 13px !important; font-weight: 650; }
+.reminder-frequency-list { margin-top: 10px; }
+.reminder-frequency-list button { display: grid; gap: 3px; min-height: 57px; padding: 10px 14px; }
+.reminder-frequency-list strong { font-size: 14px; font-weight: 650; }
+.reminder-frequency-list small { color: #70747c; font-size: 12px; }
+.reminder-summary-button { display: flex; align-items: center; justify-content: space-between; min-height: 52px; padding: 0 14px; border: 1px solid #d9dbe0; border-radius: 15px; color: #111317; background: #fff; font-size: 14px; font-weight: 600; text-align: left; }
+.reminder-summary-button span { color: #1677ff; font-size: 13px; }
+.reminder-times { display: grid; gap: 8px; }
+.reminder-times > div { display: grid; grid-template-columns: 98px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; }
+.reminder-times input, .reminder-duration input, .reminder-sheet textarea { width: 100%; min-height: 48px; padding: 0 12px; border: 1px solid #d9dbe0; border-radius: 14px; outline-color: #1677ff; color: #111317; background: #fff; font-size: 16px !important; }
+.reminder-times span { color: #70747c; font-size: 12px; }
+.reminder-times button { width: 28px; height: 28px; border-radius: 50%; color: #b45a5a; background: #fcecef; font-size: 20px; }
+.reminder-add-time { width: 100%; min-height: 44px; margin-top: 10px; border: 1px solid #b9dcff; border-radius: 14px; color: #1677ff; background: #eef7ff; font-size: 14px; font-weight: 650; }
+.reminder-as-needed { padding: 14px; border-radius: 15px; color: #70747c !important; background: #eef1f5; font-size: 13px !important; }
+.reminder-duration { display: grid; gap: 10px; }
+.reminder-duration label { display: grid; gap: 6px; color: #111317; font-size: 13px; font-weight: 650; }
+.reminder-duration input { min-height: 50px; }
+.reminder-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin: 22px 0 0; padding: 0; border: 0; }
+.reminder-days legend { grid-column: 1 / -1; margin-bottom: 3px; color: #111317; font-size: 13px; font-weight: 650; }
+.reminder-days button { min-height: 38px; border: 1px solid #d9dbe0; border-radius: 12px; color: #4f5661; background: #fff; font-size: 12px; font-weight: 650; }
+.reminder-days button.selected { border-color: #1677ff; color: #1677ff; background: #eef6ff; }
+.reminder-interval { grid-template-columns: auto 68px auto; align-items: center; gap: 8px; }
+.reminder-interval input { min-height: 44px; padding: 0 10px; border: 1px solid #d9dbe0; border-radius: 12px; outline-color: #1677ff; color: #111317; background: #fff; font-size: 16px !important; text-align: center; }
+.reminder-interval span { color: #4f5661; font-size: 14px; font-weight: 500; }
+.reminder-review { display: grid; gap: 7px; margin-top: 24px; padding: 16px; border-radius: 18px; background: #eef1f5; }
+.reminder-review small { margin-top: 8px; color: #818996; font-size: 11px; font-weight: 700; letter-spacing: .8px; }
+.reminder-review small:first-child { margin-top: 0; }
+.reminder-review strong { color: #111317; font-size: 16px; font-weight: 650; }
+.reminder-review span { color: #4f5661; font-size: 14px; }
+.reminder-sheet textarea { min-height: 108px; padding: 12px; resize: none; }
+.reminder-flow__footer { flex: 0 0 auto; padding: 12px 18px calc(18px + env(safe-area-inset-bottom)); background: #f8f8fa; }
+.reminder-flow__footer .primary-button { width: 100%; min-height: 52px; border-radius: 17px; font-size: 15px; box-shadow: 0 10px 11px rgba(22,119,255,.2); }
 @media (max-width: 360px) {
   .doses-screen--figma { padding-right: 18px; padding-left: 18px; }
   .doses-week { gap: 4px; }

@@ -4,10 +4,12 @@ type Tab = 'doses' | 'cabinet';
 type Cabinet = { id: string; name: string };
 type Medication = { id: string; cabinet_id: string; name: string; category?: string; form: string; amount: string; unit: string; note?: string; purchase_reminder?: boolean; color: string };
 type Package = { id: string; medication_id: string; quantity_remaining: number; unit: string; expires_on: string | null };
-type Dose = { id: string; medication_id: string; scheduled_time: string; quantity: number; unit: string; status: 'pending' | 'taken' | 'skipped' };
-type MedicationSchedule = { id: string; medication_id: string; scheduled_time: string; dose_quantity: number; dose_unit: string };
+type Dose = { id: string; medication_id: string; scheduled_time: string; scheduled_date?: string; quantity: number; unit: string; status: 'pending' | 'taken' | 'skipped' };
+type ReminderFrequency = 'daily' | 'multiple' | 'weekdays' | 'interval' | 'as-needed';
+type MedicationSchedule = { id: string; medication_id: string; scheduled_time: string; dose_quantity: number; dose_unit: string; frequency?: ReminderFrequency; start_date?: string; end_date?: string | null; weekdays?: number[]; interval_days?: number };
 type ScheduleDraft = { time: string; quantity: string };
 type MedicationDraft = { name: string; category: string; customCategory: string; form: string; amount: string; unit: string; quantity: string; expiresOn: string; note: string; purchaseReminder: boolean; schedules: ScheduleDraft[] };
+type ReminderDraft = { cabinetId: string; medicationId: string; frequency: ReminderFrequency; times: ScheduleDraft[]; startDate: string; endDate: string; weekdays: number[]; intervalDays: string; note: string; purchaseReminder: boolean };
 type PharmacyOffer = { id: string; name: string; price: string; address: string; distance: string; pickup: string; stock: string };
 type LocalData = { cabinets: Cabinet[]; medications: Medication[]; packages: Package[]; doses: Dose[]; schedules: MedicationSchedule[] };
 
@@ -30,6 +32,29 @@ const expirationDateKey = (value: string) => {
   const candidate = new Date(year, month - 1, day);
   if (candidate.getFullYear() !== year || candidate.getMonth() !== month - 1 || candidate.getDate() !== day) return null;
   return `${yearText}-${monthText}-${dayText}`;
+};
+const parseDateKey = (value: string) => new Date(`${value}T12:00:00`);
+const addDays = (date: Date, amount: number) => { const result = new Date(date); result.setDate(result.getDate() + amount); return result; };
+const reminderOccursOn = (date: Date, draft: ReminderDraft) => {
+  if (draft.frequency === 'as-needed') return false;
+  if (draft.frequency === 'weekdays') return draft.weekdays.includes(date.getDay());
+  if (draft.frequency === 'interval') {
+    const interval = Math.max(1, Number(draft.intervalDays) || 3);
+    const elapsed = Math.floor((date.getTime() - parseDateKey(draft.startDate).getTime()) / 86_400_000);
+    return elapsed >= 0 && elapsed % interval === 0;
+  }
+  return true;
+};
+const scheduleOccursOn = (date: Date, schedule: MedicationSchedule) => {
+  if (!schedule.frequency || schedule.frequency === 'as-needed' || !schedule.start_date) return false;
+  const key = dateKey(date);
+  if (key < schedule.start_date || (schedule.end_date && key > schedule.end_date)) return false;
+  if (schedule.frequency === 'weekdays') return (schedule.weekdays ?? [1, 2, 3, 4, 5]).includes(date.getDay());
+  if (schedule.frequency === 'interval') {
+    const elapsed = Math.floor((date.getTime() - parseDateKey(schedule.start_date).getTime()) / 86_400_000);
+    return elapsed >= 0 && elapsed % Math.max(1, schedule.interval_days ?? 3) === 0;
+  }
+  return true;
 };
 const localStorageKey = 'lifecare-mini-app-data-v2';
 const demoPharmacies: PharmacyOffer[] = [
@@ -55,6 +80,9 @@ export function App() {
   const [schedules, setSchedules] = useState<MedicationSchedule[]>(initialData.schedules);
   const [selectedDate, setSelectedDate] = useState(today);
   const [showAddMedication, setShowAddMedication] = useState(false);
+  const [reminderStart, setReminderStart] = useState(false);
+  const [reminderFlow, setReminderFlow] = useState<{ cabinetId?: string; medicationId?: string } | null>(null);
+  const [createReminderAfterMedication, setCreateReminderAfterMedication] = useState(false);
   const [packageMedication, setPackageMedication] = useState<Medication | null>(null);
   const [detailMedication, setDetailMedication] = useState<Medication | null>(null);
   const [medicationEditor, setMedicationEditor] = useState<Medication | null>(null);
@@ -73,7 +101,15 @@ export function App() {
   const schedulesByMedication = useMemo(() => schedules.reduce<Map<string, MedicationSchedule[]>>((result, item) => { result.set(item.medication_id, [...(result.get(item.medication_id) ?? []), item]); return result; }, new Map()), [schedules]);
   const showNotice = (text: string) => { setNotice(text); window.setTimeout(() => setNotice((current) => current === text ? null : current), 4000); };
 
-  async function chooseDate(date: Date) { setSelectedDate(date); }
+  async function chooseDate(date: Date) {
+    const scheduledDate = dateKey(date);
+    setSelectedDate(date);
+    setDoses((current) => {
+      const existing = new Set(current.map((dose) => dose.id));
+      const materialized = schedules.filter((schedule) => scheduleOccursOn(date, schedule)).map((schedule) => ({ id: `${schedule.id}-${scheduledDate.replaceAll('-', '')}`, medication_id: schedule.medication_id, scheduled_time: schedule.scheduled_time, scheduled_date: scheduledDate, quantity: schedule.dose_quantity, unit: schedule.dose_unit, status: 'pending' as const })).filter((dose) => !existing.has(dose.id));
+      return materialized.length ? [...current, ...materialized] : current;
+    });
+  }
   async function refreshData() { setRefreshing(true); showNotice('Данные сохранены на этом устройстве.'); window.setTimeout(() => setRefreshing(false), 180); }
   async function markDose(dose: Dose, status: 'taken' | 'skipped') {
     if (dose.status !== 'pending') return;
@@ -115,8 +151,36 @@ export function App() {
     setPackages((current) => [{ id: packageId, medication_id: medicationId, quantity_remaining: quantity, unit: stockUnit, expires_on: expirationDateKey(draft.expiresOn) }, ...current]);
     setSchedules((current) => [...scheduleEntries.map((schedule) => ({ id: schedule.id, medication_id: medicationId, scheduled_time: schedule.time, dose_quantity: schedule.quantity, dose_unit: stockUnit })), ...current]);
     if (dateKey(selectedDate) === dateKey(today())) setDoses((current) => [...current, ...scheduleEntries.map((schedule) => ({ id: `${schedule.id}-dose-${dateKey(today()).replaceAll('-', '')}`, medication_id: medicationId, scheduled_time: schedule.time, quantity: schedule.quantity, unit: stockUnit, status: 'pending' as const }))].sort((left, right) => left.scheduled_time.localeCompare(right.scheduled_time)));
+    const continueToReminder = createReminderAfterMedication;
+    setCreateReminderAfterMedication(false);
     setShowAddMedication(false);
+    if (continueToReminder) setReminderFlow({ cabinetId: selectedCabinetId, medicationId });
     showNotice('Препарат добавлен в аптечку.');
+  }
+  async function saveReminder(draft: ReminderDraft) {
+    const medication = medications.find((item) => item.id === draft.medicationId);
+    if (!medication) throw new Error('Выберите препарат из аптечки.');
+    const times = draft.frequency === 'as-needed' ? [] : draft.times.filter((item) => item.time && Number(item.quantity) > 0);
+    if (draft.frequency !== 'as-needed' && !times.length) throw new Error('Добавьте время и количество для приёма.');
+    const unit = ['Жидкость', 'Капли', 'Сироп'].includes(medication.form) ? 'мл' : 'шт.';
+    const scheduleId = makeId('schedule');
+    const intervalDays = Math.max(1, Number(draft.intervalDays) || 3);
+    const scheduleTimes = times.length ? times : [{ time: '', quantity: '0' }];
+    setSchedules((current) => [...scheduleTimes.map((item, index) => ({ id: `${scheduleId}-${index + 1}`, medication_id: medication.id, scheduled_time: item.time, dose_quantity: Number(item.quantity), dose_unit: unit, frequency: draft.frequency, start_date: draft.startDate, end_date: draft.endDate || null, weekdays: draft.frequency === 'weekdays' ? draft.weekdays : undefined, interval_days: draft.frequency === 'interval' ? intervalDays : undefined })), ...current]);
+    setMedications((current) => current.map((item) => item.id === medication.id ? { ...item, note: draft.note.trim(), purchase_reminder: draft.purchaseReminder } : item));
+    if (times.length) {
+      const start = parseDateKey(draft.startDate);
+      const limit = draft.endDate ? parseDateKey(draft.endDate) : addDays(start, 89);
+      const generated: Dose[] = [];
+      for (let day = start; day <= limit; day = addDays(day, 1)) {
+        if (!reminderOccursOn(day, draft)) continue;
+        const scheduledDate = dateKey(day);
+        times.forEach((item, index) => generated.push({ id: `${scheduleId}-${index + 1}-${scheduledDate.replaceAll('-', '')}`, medication_id: medication.id, scheduled_time: item.time, scheduled_date: scheduledDate, quantity: Number(item.quantity), unit, status: 'pending' }));
+      }
+      setDoses((current) => [...current, ...generated].sort((left, right) => `${left.scheduled_date ?? ''}${left.scheduled_time}`.localeCompare(`${right.scheduled_date ?? ''}${right.scheduled_time}`)));
+    }
+    setReminderFlow(null);
+    showNotice(draft.frequency === 'as-needed' ? 'Приём без расписания сохранён.' : 'Расписание приёма создано.');
   }
   async function addPackage(medication: Medication, quantityText: string, expiresOn: string, packageId: string) {
     const quantity = Number(quantityText);
@@ -172,14 +236,16 @@ export function App() {
   const title = tab === 'doses' ? 'Приёмы' : selectedCabinet?.name ?? 'Аптечка';
   const cabinetDisplayName = selectedCabinet?.name === 'Домашняя аптечка' ? 'Домашняя' : title;
   const eyebrow = tab === 'doses' ? 'СЕГОДНЯ' : 'ДОМАШНЯЯ АПТЕЧКА';
-  const hasOpenSheet = Boolean(showAddMedication || packageMedication || detailMedication || medicationEditor || medicationToDelete || pharmacyMedication || showCabinetPicker || cabinetEditor);
+  const hasOpenSheet = Boolean(showAddMedication || reminderStart || reminderFlow || packageMedication || detailMedication || medicationEditor || medicationToDelete || pharmacyMedication || showCabinetPicker || cabinetEditor);
   return <main className={`app-shell app-shell--${tab}${hasOpenSheet ? ' app-shell--modal-open' : ''}`}>
     {tab === 'cabinet' ? <header className="header header--cabinet"><div className="cabinet-heading"><p className="eyebrow">{eyebrow}</p><div className="cabinet-title-row"><h1>{cabinetDisplayName}</h1>{selectedCabinet ? <button className="cabinet-edit" onClick={() => setCabinetEditor({ mode: 'rename', cabinet: selectedCabinet })} aria-label="Переименовать аптечку">✎</button> : null}</div><p className="cabinet-summary">{cabinetMedications.length} {cabinetMedications.length === 1 ? 'препарат' : cabinetMedications.length >= 2 && cabinetMedications.length <= 4 ? 'препарата' : 'препаратов'} · всё в порядке</p></div><button className="round-button" disabled={!selectedCabinet} onClick={() => setShowAddMedication(true)} aria-label="Добавить препарат">+</button></header> : null}
     {message ? <div className="message" role="alert">{message}</div> : null}
     {notice ? <div className="notice" role="status">{notice}</div> : null}
-    {loading ? <div className="loading"><span className="loader" />Загружаем данные…</div> : tab === 'doses' ? <Doses doses={doses} medicationById={medicationById} selectedDate={selectedDate} updatingDoseId={updatingDoseId} onSelectDate={chooseDate} onMark={markDose} /> : selectedCabinet ? <Cabinet cabinetName={selectedCabinet.name} medications={cabinetMedications} packagesByMedication={packagesByMedication} onAdd={() => setShowAddMedication(true)} onAddPackage={setPackageMedication} onOpen={setDetailMedication} onOrder={setPharmacyMedication} onChooseCabinet={() => setShowCabinetPicker(true)} /> : <CabinetEmpty onCreate={() => setCabinetEditor({ mode: 'create' })} />}
+    {loading ? <div className="loading"><span className="loader" />Загружаем данные…</div> : tab === 'doses' ? <Doses doses={doses} medicationById={medicationById} selectedDate={selectedDate} updatingDoseId={updatingDoseId} onSelectDate={chooseDate} onMark={markDose} onCreate={() => setReminderStart(true)} /> : selectedCabinet ? <Cabinet cabinetName={selectedCabinet.name} medications={cabinetMedications} packagesByMedication={packagesByMedication} onAdd={() => setShowAddMedication(true)} onAddPackage={setPackageMedication} onOpen={setDetailMedication} onOrder={setPharmacyMedication} onChooseCabinet={() => setShowCabinetPicker(true)} /> : <CabinetEmpty onCreate={() => setCabinetEditor({ mode: 'create' })} />}
     <nav className="tabbar tabbar--two" aria-label="Разделы"><TabButton active={tab === 'doses'} onClick={() => setTab('doses')} icon="⌂" label="Приёмы" /><TabButton active={tab === 'cabinet'} onClick={() => setTab('cabinet')} icon="▰" label="Аптечка" /></nav>
     {showAddMedication ? <AddMedication onClose={() => setShowAddMedication(false)} onSubmit={addMedication} /> : null}
+    {reminderStart ? <ReminderStart onClose={() => setReminderStart(false)} onNewMedication={() => { setReminderStart(false); setCreateReminderAfterMedication(true); setShowAddMedication(true); }} onFromCabinet={() => { setReminderStart(false); setReminderFlow({}); }} /> : null}
+    {reminderFlow ? <ReminderFlow initial={reminderFlow} cabinets={cabinets} medications={medications} packagesByMedication={packagesByMedication} selectedDate={selectedDate} onClose={() => setReminderFlow(null)} onSave={saveReminder} /> : null}
     {packageMedication ? <AddPackage medication={packageMedication} onClose={() => setPackageMedication(null)} onSubmit={addPackage} /> : null}
     {detailMedication ? <MedicationDetails medication={detailMedication} packages={packagesByMedication.get(detailMedication.id) ?? []} schedules={schedulesByMedication.get(detailMedication.id) ?? []} onClose={() => setDetailMedication(null)} onEdit={() => { setDetailMedication(null); setMedicationEditor(detailMedication); }} onDelete={() => { setDetailMedication(null); setMedicationToDelete(detailMedication); }} onOrder={() => {}} onAddPackage={() => { setDetailMedication(null); setPackageMedication(detailMedication); }} /> : null}
     {medicationEditor ? <MedicationEditor medication={medicationEditor} packages={packagesByMedication.get(medicationEditor.id) ?? []} onClose={() => setMedicationEditor(null)} onSave={saveMedication} /> : null}
@@ -191,9 +257,10 @@ export function App() {
   </main>;
 }
 
-function Doses({ doses, medicationById, selectedDate, updatingDoseId, onSelectDate, onMark }: { doses: Dose[]; medicationById: Map<string, Medication>; selectedDate: Date; updatingDoseId: string | null; onSelectDate: (date: Date) => Promise<void>; onMark: (dose: Dose, status: 'taken' | 'skipped') => Promise<void> }) {
-  const orderedDoses = [...doses].sort((left, right) => left.scheduled_time.localeCompare(right.scheduled_time));
-  const taken = doses.filter((dose) => dose.status === 'taken').length;
+function Doses({ doses, medicationById, selectedDate, updatingDoseId, onSelectDate, onMark, onCreate }: { doses: Dose[]; medicationById: Map<string, Medication>; selectedDate: Date; updatingDoseId: string | null; onSelectDate: (date: Date) => Promise<void>; onMark: (dose: Dose, status: 'taken' | 'skipped') => Promise<void>; onCreate: () => void }) {
+  const selectedDateKey = dateKey(selectedDate);
+  const orderedDoses = doses.filter((dose) => !dose.scheduled_date || dose.scheduled_date === selectedDateKey).sort((left, right) => left.scheduled_time.localeCompare(right.scheduled_time));
+  const taken = orderedDoses.filter((dose) => dose.status === 'taken').length;
   const isToday = dateKey(selectedDate) === dateKey(today());
   const canMark = dateKey(selectedDate) <= dateKey(today());
   const days = Array.from({ length: 7 }, (_, index) => { const date = new Date(selectedDate); date.setDate(selectedDate.getDate() + index - 3); return date; });
@@ -201,7 +268,50 @@ function Doses({ doses, medicationById, selectedDate, updatingDoseId, onSelectDa
   const plannedCopy = orderedDoses.length ? `${orderedDoses.length} ${orderedDoses.length === 1 ? 'приём запланирован' : orderedDoses.length >= 2 && orderedDoses.length <= 4 ? 'приёма запланировано' : 'приёмов запланировано'}` : 'Нет приёмов на сегодня';
   const remaining = Math.max(orderedDoses.length - taken, 0);
   const remainingCopy = remaining === 1 ? 'приём' : remaining >= 2 && remaining <= 4 ? 'приёма' : 'приёмов';
-  return <section className="doses-screen doses-screen--figma"><div className="doses-hero"><div><p>СЕГОДНЯ</p><h1>{dateTitle}</h1><span>{plannedCopy}</span></div><button className="doses-calendar-button" aria-label="Выбрать дату">▣</button></div><div className="doses-week">{days.map((date) => { const active = dateKey(date) === dateKey(selectedDate); return <button key={dateKey(date)} className={active ? 'active' : ''} onClick={() => void onSelectDate(date)}><b>{new Intl.DateTimeFormat('ru-RU', { weekday: 'short' }).format(date).replace('.', '').slice(0, 2).toUpperCase()}</b><span>{date.getDate()}</span></button>; })}</div>{orderedDoses.length ? <><div className="doses-progress"><span>Остался {remaining} {remainingCopy}</span><span>{taken} из {orderedDoses.length}</span><i><b style={{ width: `${(taken / orderedDoses.length) * 100}%` }} /></i></div><div className="doses-list--figma">{orderedDoses.map((dose) => { const medication = medicationById.get(dose.medication_id); return <section key={dose.id}><time>{dose.scheduled_time.slice(0, 5)}</time><article className={dose.status === 'pending' ? 'dose-card--figma' : 'dose-card--figma dose-card--done'}><span className="dose-card__icon">◉</span><div><strong>{medication?.name ?? 'Препарат'}</strong><p>{medication ? medicationDescription(medication) : `${dose.quantity} ${dose.unit}`}</p>{medication?.note ? <small>{medication.note}</small> : null}</div>{dose.status === 'pending' && canMark ? <button disabled={dose.id === updatingDoseId} onClick={() => void onMark(dose, 'taken')} aria-label={`Отметить ${medication?.name ?? 'приём'} принятым`}>{dose.id === updatingDoseId ? '…' : '✓'}</button> : <span className="dose-card__status">{dose.status === 'taken' ? 'Принято' : 'Пропущено'}</span>}</article></section>; })}</div></> : <div className="doses-empty--figma"><span>✓</span><h2>{isToday ? 'На сегодня ничего не запланировано' : 'На этот день ничего не запланировано'}</h2><p>Добавьте препарат с расписанием, чтобы видеть приёмы здесь.</p></div>}</section>;
+  return <section className="doses-screen doses-screen--figma"><div className="doses-hero"><div><p>СЕГОДНЯ</p><h1>{dateTitle}</h1><span>{plannedCopy}</span></div><button className="doses-calendar-button" aria-label="Добавить приём" onClick={onCreate}>＋</button></div><div className="doses-week">{days.map((date) => { const active = dateKey(date) === dateKey(selectedDate); return <button key={dateKey(date)} className={active ? 'active' : ''} onClick={() => void onSelectDate(date)}><b>{new Intl.DateTimeFormat('ru-RU', { weekday: 'short' }).format(date).replace('.', '').slice(0, 2).toUpperCase()}</b><span>{date.getDate()}</span></button>; })}</div>{orderedDoses.length ? <><div className="doses-progress"><span>Остался {remaining} {remainingCopy}</span><span>{taken} из {orderedDoses.length}</span><i><b style={{ width: `${(taken / orderedDoses.length) * 100}%` }} /></i></div><div className="doses-list--figma">{orderedDoses.map((dose) => { const medication = medicationById.get(dose.medication_id); return <section key={dose.id}><time>{dose.scheduled_time.slice(0, 5)}</time><article className={dose.status === 'pending' ? 'dose-card--figma' : 'dose-card--figma dose-card--done'}><span className="dose-card__icon">◉</span><div><strong>{medication?.name ?? 'Препарат'}</strong><p>{medication ? medicationDescription(medication) : `${dose.quantity} ${dose.unit}`}</p>{medication?.note ? <small>{medication.note}</small> : null}</div>{dose.status === 'pending' && canMark ? <button disabled={dose.id === updatingDoseId} onClick={() => void onMark(dose, 'taken')} aria-label={`Отметить ${medication?.name ?? 'приём'} принятым`}>{dose.id === updatingDoseId ? '…' : '✓'}</button> : <span className="dose-card__status">{dose.status === 'taken' ? 'Принято' : 'Пропущено'}</span>}</article></section>; })}</div></> : <div className="doses-empty--figma"><span>＋</span><h2>{isToday ? 'На сегодня ничего не запланировано' : 'На этот день ничего не запланировано'}</h2><p>Добавьте приём из аптечки, чтобы видеть его в расписании.</p><button className="primary-button doses-empty__action" onClick={onCreate}>＋ Добавить приём</button></div>}</section>;
+}
+
+function ReminderStart({ onClose, onNewMedication, onFromCabinet }: { onClose: () => void; onNewMedication: () => void; onFromCabinet: () => void }) {
+  return <div className="modal-backdrop"><section className="reminder-sheet reminder-start" role="dialog" aria-modal="true" aria-labelledby="reminder-start-title"><div className="modal-handle" /><header className="sheet-header"><button className="close" onClick={onClose} aria-label="Закрыть">×</button><b>Добавить приём</b><span /></header><div className="reminder-sheet__content"><p className="medicine-flow__eyebrow">Новое напоминание</p><h2 id="reminder-start-title">Создать приём</h2><p>Выберите, как добавить препарат в расписание.</p><button className="reminder-option" onClick={onNewMedication}><strong>＋ Добавить новый препарат</strong><span>Сначала заполним карточку препарата</span></button><button className="reminder-option" onClick={onFromCabinet}><strong>Создать приём из аптечки</strong><span>Выберите препарат, который уже есть в запасе</span></button></div></section></div>;
+}
+
+function ReminderFlow({ initial, cabinets, medications, packagesByMedication, selectedDate, onClose, onSave }: { initial: { cabinetId?: string; medicationId?: string }; cabinets: Cabinet[]; medications: Medication[]; packagesByMedication: Map<string, Package[]>; selectedDate: Date; onClose: () => void; onSave: (draft: ReminderDraft) => Promise<void> }) {
+  const initialCabinetId = initial.cabinetId ?? cabinets[0]?.id ?? '';
+  const [screen, setScreen] = useState<1 | 2 | 3 | 4 | 5>(initial.medicationId ? 3 : initial.cabinetId ? 2 : 1);
+  const [draft, setDraft] = useState<ReminderDraft>({ cabinetId: initialCabinetId, medicationId: initial.medicationId ?? '', frequency: 'daily', times: [{ time: '09:00', quantity: '1' }], startDate: dateKey(selectedDate), endDate: '', weekdays: [1, 2, 3, 4, 5], intervalDays: '3', note: '', purchaseReminder: false });
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const medicationsInCabinet = medications.filter((item) => item.cabinet_id === draft.cabinetId);
+  const medication = medications.find((item) => item.id === draft.medicationId);
+  const patch = (values: Partial<ReminderDraft>) => { setDraft((current) => ({ ...current, ...values })); setError(null); };
+  const available = (id: string) => (packagesByMedication.get(id) ?? []).filter((item) => !item.expires_on || item.expires_on >= dateKey(today())).reduce((total, item) => total + Number(item.quantity_remaining), 0);
+  const continueFlow = () => {
+    if (screen === 1 && !draft.cabinetId) { setError('Выберите аптечку.'); return; }
+    if (screen === 2 && !draft.medicationId) { setError('Выберите препарат.'); return; }
+    if (screen === 4 && draft.frequency === 'weekdays' && !draft.weekdays.length) { setError('Выберите хотя бы один день.'); return; }
+    if (screen === 4 && draft.frequency === 'interval' && (!Number.isInteger(Number(draft.intervalDays)) || Number(draft.intervalDays) < 1)) { setError('Укажите интервал в днях.'); return; }
+    if (screen === 4 && draft.frequency !== 'as-needed' && !draft.times.some((item) => item.time && Number(item.quantity) > 0)) { setError('Добавьте время и количество для приёма.'); return; }
+    if (screen !== 5) { setScreen((current) => (current + 1) as 1 | 2 | 3 | 4 | 5); return; }
+    if (saving) return;
+    setSaving(true);
+    void onSave(draft).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Не удалось создать расписание.')).finally(() => setSaving(false));
+  };
+  const back = () => screen === 1 ? onClose() : setScreen((current) => (current - 1) as 1 | 2 | 3 | 4 | 5);
+  const scheduleLabels: Record<ReminderFrequency, { title: string; description: string }> = {
+    daily: { title: 'Каждый день', description: 'Принимать в одно и то же время' },
+    multiple: { title: 'По циклическому графику', description: 'Несколько раз в течение дня' },
+    weekdays: { title: 'В определённые дни недели', description: 'Например, по будням' },
+    interval: { title: 'Раз в несколько дней', description: 'Например, раз в 3 дня' },
+    'as-needed': { title: 'По мере необходимости', description: 'Без автоматического расписания' },
+  };
+  return <div className="modal-backdrop"><section className="reminder-sheet reminder-flow" role="dialog" aria-modal="true" aria-labelledby="reminder-flow-title"><div className="modal-handle" /><header className="sheet-header"><button className="close" onClick={back} disabled={saving} aria-label={screen === 1 ? 'Закрыть' : 'Назад'}>{screen === 1 ? '×' : '‹'}</button><b>{screen} из 5</b><button className="close reminder-flow__close" onClick={onClose} disabled={saving} aria-label="Закрыть">×</button></header><div className="reminder-sheet__content">
+    {screen === 1 ? <><p className="medicine-flow__eyebrow">Новое напоминание</p><h2 id="reminder-flow-title">Создать приём</h2><p>Из какой аптечки будем принимать препарат?</p><div className="reminder-choice-list">{cabinets.map((cabinet) => { const active = cabinet.id === draft.cabinetId; const count = medications.filter((item) => item.cabinet_id === cabinet.id).length; return <button className={active ? 'selected' : ''} key={cabinet.id} onClick={() => patch({ cabinetId: cabinet.id, medicationId: '' })}><span><strong>{cabinet.name}</strong><small>{count} {count === 1 ? 'препарат' : count >= 2 && count <= 4 ? 'препарата' : 'препаратов'}</small></span><i aria-hidden="true" /></button>; })}</div></> : null}
+    {screen === 2 ? <><h2 id="reminder-flow-title">Выберите лекарство из аптечки</h2><div className="reminder-medication-list">{medicationsInCabinet.map((item) => { const active = item.id === draft.medicationId; const unit = packagesByMedication.get(item.id)?.[0]?.unit ?? 'шт.'; return <button className={active ? 'selected' : ''} key={item.id} onClick={() => patch({ medicationId: item.id })}><i aria-hidden="true" /><span><strong>{item.name}</strong><small>{medicationDescription(item)}</small><em>В запасе: {available(item.id)} {unit}</em></span></button>; })}</div>{!medicationsInCabinet.length ? <p className="flow-validation">В этой аптечке пока нет препаратов.</p> : null}</> : null}
+    {screen === 3 ? <><h2 id="reminder-flow-title">Когда планируете принимать это лекарство?</h2><p className="reminder-caption">Варианты графика</p><div className="reminder-frequency-list">{(Object.keys(scheduleLabels) as ReminderFrequency[]).map((frequency) => <button className={draft.frequency === frequency ? 'selected' : ''} key={frequency} onClick={() => patch({ frequency })}><strong>{scheduleLabels[frequency].title}</strong><small>{scheduleLabels[frequency].description}</small></button>)}</div></> : null}
+    {screen === 4 ? <><h2 id="reminder-flow-title">Настройка расписания приёма</h2><label>Когда планируете принимать это лекарство?<button className="reminder-summary-button" onClick={() => setScreen(3)}>{scheduleLabels[draft.frequency].title}<span>Изменить</span></button></label>{draft.frequency === 'weekdays' ? <fieldset className="reminder-days"><legend>Дни приёма</legend>{[['Пн', 1], ['Вт', 2], ['Ср', 3], ['Чт', 4], ['Пт', 5], ['Сб', 6], ['Вс', 0]].map(([label, day]) => <button type="button" className={draft.weekdays.includes(day as number) ? 'selected' : ''} key={String(day)} onClick={() => { const value = day as number; patch({ weekdays: draft.weekdays.includes(value) ? draft.weekdays.filter((item) => item !== value) : [...draft.weekdays, value].sort() }); }}>{label}</button>)}</fieldset> : null}{draft.frequency === 'interval' ? <label className="reminder-interval">Повторять каждые<input aria-label="Интервал в днях" inputMode="numeric" value={draft.intervalDays} onChange={(event) => patch({ intervalDays: event.target.value.replace(/\D/g, '').slice(0, 2) })} /><span>дня</span></label> : null}{draft.frequency !== 'as-needed' ? <><p className="reminder-caption">Время</p><div className="reminder-times">{draft.times.map((item, index) => <div key={`${index}-${item.time}`}><input aria-label={`Время приёма ${index + 1}`} type="time" value={item.time} onChange={(event) => patch({ times: draft.times.map((time, timeIndex) => timeIndex === index ? { ...time, time: event.target.value } : time) })} /><input aria-label={`Количество для времени ${index + 1}`} inputMode="decimal" value={item.quantity} onChange={(event) => patch({ times: draft.times.map((time, timeIndex) => timeIndex === index ? { ...time, quantity: event.target.value } : time) })} /><span>{medication?.form ?? 'шт.'}</span>{draft.times.length > 1 ? <button aria-label="Удалить время" onClick={() => patch({ times: draft.times.filter((_, timeIndex) => timeIndex !== index) })}>×</button> : null}</div>)}</div><button className="reminder-add-time" onClick={() => patch({ times: [...draft.times, { time: '18:00', quantity: '1' }] })}>＋ Добавить время</button></> : <p className="reminder-as-needed">Приём не появится автоматически в расписании. Его можно будет добавить вручную.</p>}<p className="reminder-caption">Длительность</p><div className="reminder-duration"><label>Дата начала<input type="date" value={draft.startDate} onChange={(event) => patch({ startDate: event.target.value })} /></label><label>Дата окончания<input type="date" value={draft.endDate} min={draft.startDate} onChange={(event) => patch({ endDate: event.target.value })} /></label></div></> : null}
+    {screen === 5 && medication ? <><p className="medicine-flow__eyebrow">Проверьте расписание</p><h2 id="reminder-flow-title">{medication.name}</h2><p>{medicationDescription(medication)}</p><article className="reminder-review"><small>ГРАФИК</small><strong>{scheduleLabels[draft.frequency].title}</strong>{draft.frequency === 'weekdays' ? <span>{['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'].filter((_, day) => draft.weekdays.includes(day)).join(', ')}</span> : null}{draft.frequency === 'interval' ? <span>Каждые {Math.max(1, Number(draft.intervalDays) || 3)} дня</span> : null}{draft.times.length ? draft.times.map((item) => <span key={`${item.time}-${item.quantity}`}>{item.time} · {item.quantity} {medication.form}</span>) : <span>По мере необходимости</span>}<small>НАЧАЛО</small><span>{new Date(`${draft.startDate}T12:00:00`).toLocaleDateString('ru-RU')}</span></article><label>Комментарий к приёму<textarea value={draft.note} onChange={(event) => patch({ note: event.target.value })} placeholder="Например, после еды" /></label><label className="purchase-toggle"><span>Напомнить о покупке</span><input type="checkbox" checked={draft.purchaseReminder} onChange={(event) => patch({ purchaseReminder: event.target.checked })} /></label></> : null}
+    {error ? <p className="flow-validation" role="alert">{error}</p> : null}
+  </div><footer className="reminder-flow__footer"><button className="primary-button" onClick={continueFlow} disabled={saving}>{saving ? 'Сохраняем…' : screen === 5 ? 'Готово' : 'Далее'}</button></footer></section></div>;
 }
 
 function Calendar({ selectedDate, onSelect }: { selectedDate: Date; onSelect: (date: Date) => Promise<void> }) {
