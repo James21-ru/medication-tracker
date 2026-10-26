@@ -8,12 +8,38 @@ The first version works fully offline. A person adds medications and schedules, 
 
 The detailed product decisions live in [`docs/`](docs/).
 
+## Architecture
+
+- `mobile/` — Expo + React Native + TypeScript. The native client remains offline-first with SQLite.
+- `telegram-mini-app/` — React 19 + TypeScript + Vite. The Mini App keeps local storage during an endpoint-by-endpoint migration so current test flows remain fast and reliable.
+- `backend/` — new FastAPI + SQLAlchemy + Alembic API for local PostgreSQL development.
+- `supabase/` — legacy functions/migrations, retained until the Telegram bot server flow is migrated and verified.
+
+The FastAPI database is local development infrastructure, not a cloud account system. The development API uses a fixed local owner ID; authentication and cloud sync require a separate design before remote deployment.
+
+## Local PostgreSQL and API
+
+Install Docker Desktop and run from the repository root:
+
+```bash
+docker compose up --build
+```
+
+PostgreSQL starts on `localhost:5432`; FastAPI starts on `http://localhost:8000`. The first migration runs automatically.
+
+- Health: `http://localhost:8000/api/v1/health`
+- API docs: `http://localhost:8000/docs`
+
+The first schema covers аптечки, препараты, упаковки, расписания и события приёмов. The initial API exposes cabinet creation/renaming, medication CRUD and package creation.
+
 ## Technology
 
 - Expo + React Native + TypeScript
 - Expo Router
 - SQLite for on-device data
 - Expo Notifications for local reminders
+- React 19 + Vite for the Telegram Mini App
+- FastAPI + SQLAlchemy + Alembic + PostgreSQL for the local API
 
 ## Status
 

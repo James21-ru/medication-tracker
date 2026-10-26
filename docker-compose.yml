@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lifecare-postgres
+    environment:
+      POSTGRES_DB: lifecare
+      POSTGRES_USER: lifecare
+      POSTGRES_PASSWORD: lifecare
+    ports:
+      - "5432:5432"
+    volumes:
+      - lifecare_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lifecare -d lifecare"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://lifecare:lifecare@postgres:5432/lifecare
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  lifecare_postgres_data:
