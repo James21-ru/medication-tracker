@@ -7,7 +7,9 @@ services:
       POSTGRES_USER: lifecare
       POSTGRES_PASSWORD: lifecare
     ports:
-      - "5432:5432"
+      # 5432 is commonly occupied by a locally installed PostgreSQL instance.
+      # The container still uses 5432 internally; host clients use 5433.
+      - "5433:5432"
     volumes:
       - lifecare_postgres_data:/var/lib/postgresql/data
     healthcheck:

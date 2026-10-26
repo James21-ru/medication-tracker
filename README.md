@@ -25,7 +25,7 @@ Install Docker Desktop and run from the repository root:
 docker compose up --build
 ```
 
-PostgreSQL starts on `localhost:5432`; FastAPI starts on `http://localhost:8000`. The first migration runs automatically.
+PostgreSQL starts on `localhost:5433`; FastAPI starts on `http://localhost:8000`. The first migration runs automatically. Port `5433` avoids conflict with a PostgreSQL instance that may already use the conventional local port `5432`.
 
 - Health: `http://localhost:8000/api/v1/health`
 - API docs: `http://localhost:8000/docs`
