@@ -36,6 +36,9 @@ class Settings(BaseSettings):
         # Dashboard copy buttons and shell snippets can add quote/backtick
         # wrappers.  These characters are never part of a PostgreSQL URL.
         url = url.strip(" \\t\\r\\n'\"`")
+        pasted_url = re.search(r"postgres(?:ql)?(?:\+[a-z0-9_]+)?://[^\s'\"`]+", url, flags=re.IGNORECASE)
+        if pasted_url:
+            url = pasted_url.group(0)
         if url.startswith("postgres://"):
             return "postgresql+psycopg://" + url.removeprefix("postgres://")
         if url.startswith("postgresql://"):
