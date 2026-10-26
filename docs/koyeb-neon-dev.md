@@ -2,6 +2,19 @@
 
 Этот контур предназначен только для тестовых данных. До появления проверки Telegram `initData` не добавляйте в него данные реальных пользователей.
 
+## Neon CLI onboarding
+
+Neon может связать репозиторий с проектом и записать серверный `DATABASE_URL` в корневой `.env.local`. Файл игнорируется Git и читается только FastAPI; это не `telegram-mini-app/.env.local`, который Vite использует для клиентской сборки.
+
+Запускайте из корня репозитория после входа в Neon:
+
+```bash
+npx neon@latest init -y --org-id org-round-truth-32817810 --project-id odd-surf-48826612 --branch production --services postgres
+npx neon@latest deploy
+```
+
+Если CLI откроет браузер, завершите вход в Neon и повторите команду. `neon deploy` меняет внешний Neon-проект, поэтому перед запуском проверьте идентификатор проекта и ветку.
+
 ## 1. Neon: PostgreSQL
 
 1. Создайте проект в Neon и базу данных `lifecare_dev`.
