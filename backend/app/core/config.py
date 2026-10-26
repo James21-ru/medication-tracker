@@ -22,8 +22,17 @@ class Settings(BaseSettings):
     @field_validator("database_url", "database_url_unpooled", mode="before")
     @classmethod
     def normalize_database_url(cls, value: object) -> str:
-        """Accept standard PostgreSQL URLs from managed providers such as Neon."""
-        url = str(value)
+        """Accept PostgreSQL URLs copied from managed-provider dashboards.
+
+        Hosting control panels sometimes preserve surrounding quotes or a
+        ``DATABASE_URL=`` assignment when a value is pasted.  Accept those
+        harmless variants so a deploy does not fail before the API starts.
+        """
+        url = str(value).strip()
+        if url.startswith("DATABASE_URL="):
+            url = url.removeprefix("DATABASE_URL=").strip()
+        if len(url) >= 2 and url[0] == url[-1] and url[0] in {"'", '"'}:
+            url = url[1:-1].strip()
         if url.startswith("postgres://"):
             return "postgresql+psycopg://" + url.removeprefix("postgres://")
         if url.startswith("postgresql://"):
