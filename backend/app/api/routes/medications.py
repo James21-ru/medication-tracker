@@ -46,6 +46,13 @@ async def delete_medication(medication_id: UUID, session: AsyncSession = Depends
     await session.commit()
 
 
+@router.get("/{medication_id}/packages", response_model=list[PackageRead])
+async def list_packages(medication_id: UUID, session: AsyncSession = Depends(get_session)) -> list[MedicationPackage]:
+    await owned_medication(medication_id, session)
+    statement = select(MedicationPackage).where(MedicationPackage.medication_id == medication_id).order_by(MedicationPackage.created_at.desc())
+    return list((await session.scalars(statement)).all())
+
+
 @router.post("/{medication_id}/packages", response_model=PackageRead, status_code=status.HTTP_201_CREATED)
 async def create_package(medication_id: UUID, payload: PackageCreate, session: AsyncSession = Depends(get_session)) -> MedicationPackage:
     await owned_medication(medication_id, session)

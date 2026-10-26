@@ -32,6 +32,19 @@ PostgreSQL starts on `localhost:5433`; FastAPI starts on `http://localhost:8000`
 
 The first schema covers аптечки, препараты, упаковки, расписания и события приёмов. The initial API exposes cabinet creation/renaming, medication CRUD and package creation.
 
+### Test the Telegram Mini App against the local API
+
+Keep `docker compose up --build` running. In a second terminal window run:
+
+```bash
+cd telegram-mini-app
+npm run dev
+```
+
+Open the local Vite address that it prints (normally `http://localhost:5173`) in a desktop browser. `telegram-mini-app/.env.local` configures this local browser build to use `http://localhost:8000/api/v1`; it is intentionally ignored by Git and must never be used for a deployed Telegram Mini App.
+
+The current migration covers the cabinet data vertical: cabinets, medications and packages. Reminder schedules and dose events remain in the device cache until their corresponding API endpoints are introduced.
+
 ## Technology
 
 - Expo + React Native + TypeScript

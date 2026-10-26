@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ApiMedication, ApiPackage, hasLocalApi, localApi } from './api';
 
 type Tab = 'doses' | 'cabinet';
 type Cabinet = { id: string; name: string };
@@ -64,11 +65,14 @@ const demoPharmacies: PharmacyOffer[] = [
 ];
 const emptyLocalData = (): LocalData => ({ cabinets: [{ id: 'cabinet-home', name: 'Домашняя аптечка' }], medications: [], packages: [], doses: [], schedules: [] });
 function readLocalData(): LocalData { try { const value = window.localStorage.getItem(localStorageKey); if (!value) return emptyLocalData(); const parsed = JSON.parse(value) as Partial<LocalData>; if (!Array.isArray(parsed.cabinets) || !Array.isArray(parsed.medications) || !Array.isArray(parsed.packages) || !Array.isArray(parsed.doses) || !Array.isArray(parsed.schedules)) return emptyLocalData(); return { cabinets: parsed.cabinets, medications: parsed.medications, packages: parsed.packages, doses: parsed.doses, schedules: parsed.schedules }; } catch { return emptyLocalData(); } }
+const fromApiMedication = (item: ApiMedication): Medication => ({ id: item.id, cabinet_id: item.cabinet_id, name: item.name, category: item.category ?? undefined, form: item.form, amount: item.dosage_value ?? '', unit: item.dosage_unit ?? 'мг', barcode: item.barcode ?? undefined, note: item.note ?? undefined, purchase_reminder: item.purchase_reminder_enabled, color: '#20A278' });
+const fromApiPackage = (item: ApiPackage): Package => ({ id: item.id, medication_id: item.medication_id, quantity_remaining: item.quantity_remaining, unit: item.unit, expires_on: item.expires_on });
 
 export function App() {
   const initialData = useMemo(readLocalData, []);
   const [tab, setTab] = useState<Tab>('doses');
-  const [loading] = useState(false);
+  const [loading, setLoading] = useState(hasLocalApi);
+  const [apiMode, setApiMode] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -93,6 +97,33 @@ export function App() {
   const [cabinetEditor, setCabinetEditor] = useState<{ mode: 'create' } | { mode: 'rename'; cabinet: Cabinet } | null>(null);
   const [updatingDoseId, setUpdatingDoseId] = useState<string | null>(null);
   const updatingDoseIds = useRef(new Set<string>());
+  useEffect(() => {
+    if (!hasLocalApi) return;
+    let cancelled = false;
+    const loadDatabase = async () => {
+      try {
+        let remoteCabinets = await localApi.listCabinets();
+        if (!remoteCabinets.length) remoteCabinets = [await localApi.createCabinet('Домашняя аптечка')];
+        const nextCabinets = remoteCabinets.map(({ id, name }) => ({ id, name }));
+        const medicationGroups = await Promise.all(nextCabinets.map((cabinet) => localApi.listMedications(cabinet.id)));
+        const nextMedications = medicationGroups.flat().map(fromApiMedication);
+        const packageGroups = await Promise.all(nextMedications.map((medication) => localApi.listPackages(medication.id)));
+        if (cancelled) return;
+        setCabinets(nextCabinets);
+        setMedications(nextMedications);
+        setPackages(packageGroups.flat().map(fromApiPackage));
+        setSelectedCabinetId((current) => nextCabinets.some((cabinet) => cabinet.id === current) ? current : nextCabinets[0]?.id ?? null);
+        setApiMode(true);
+      } catch {
+        // Keep the local-first cache available if the development API is offline.
+        setApiMode(false);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void loadDatabase();
+    return () => { cancelled = true; };
+  }, []);
   useEffect(() => { window.localStorage.setItem(localStorageKey, JSON.stringify({ cabinets, medications, packages, doses, schedules } satisfies LocalData)); }, [cabinets, medications, packages, doses, schedules]);
   const medicationById = useMemo(() => new Map(medications.map((item) => [item.id, item])), [medications]);
   const selectedCabinet = useMemo(() => cabinets.find((item) => item.id === selectedCabinetId) ?? null, [cabinets, selectedCabinetId]);
@@ -145,10 +176,18 @@ export function App() {
     const scheduleEntries = draft.schedules.map((schedule, index) => ({ id: `${operationId}-schedule-${index + 1}`, time: schedule.time, quantity: Number(schedule.quantity) }));
     if (!draft.name.trim() || !Number.isFinite(quantity) || quantity <= 0) { setMessage('Укажите название препарата и количество в наличии.'); return; }
     const stockUnit = ['Жидкость', 'Капли', 'Сироп'].includes(draft.form) ? 'мл' : 'шт.';
-    const medicationId = `${operationId}-medication`;
-    const packageId = `${operationId}-package`;
-    setMedications((current) => [{ id: medicationId, cabinet_id: selectedCabinetId, name: draft.name.trim(), barcode: draft.barcode || undefined, category: draft.category === 'Своя категория' ? draft.customCategory.trim() : draft.category, form: draft.form, amount: draft.amount.trim(), unit: draft.unit, note: draft.note.trim(), purchase_reminder: draft.purchaseReminder, color: '#20A278' }, ...current]);
-    setPackages((current) => [{ id: packageId, medication_id: medicationId, quantity_remaining: quantity, unit: stockUnit, expires_on: expirationDateKey(draft.expiresOn) }, ...current]);
+    let medicationId = `${operationId}-medication`;
+    let nextMedication: Medication = { id: medicationId, cabinet_id: selectedCabinetId, name: draft.name.trim(), barcode: draft.barcode || undefined, category: draft.category === 'Своя категория' ? draft.customCategory.trim() : draft.category, form: draft.form, amount: draft.amount.trim(), unit: draft.unit, note: draft.note.trim(), purchase_reminder: draft.purchaseReminder, color: '#20A278' };
+    let nextPackage: Package = { id: `${operationId}-package`, medication_id: medicationId, quantity_remaining: quantity, unit: stockUnit, expires_on: expirationDateKey(draft.expiresOn) };
+    if (apiMode) {
+      const remoteMedication = await localApi.createMedication(selectedCabinetId, { name: nextMedication.name, category: nextMedication.category ?? null, form: nextMedication.form, dosage_value: nextMedication.amount || null, dosage_unit: nextMedication.unit || null, barcode: nextMedication.barcode ?? null, note: nextMedication.note ?? null, purchase_reminder_enabled: Boolean(nextMedication.purchase_reminder) });
+      medicationId = remoteMedication.id;
+      nextMedication = fromApiMedication(remoteMedication);
+      const remotePackage = await localApi.createPackage(medicationId, { quantity_initial: quantity, quantity_remaining: quantity, unit: stockUnit, expires_on: nextPackage.expires_on });
+      nextPackage = fromApiPackage(remotePackage);
+    }
+    setMedications((current) => [nextMedication, ...current]);
+    setPackages((current) => [nextPackage, ...current]);
     setSchedules((current) => [...scheduleEntries.map((schedule) => ({ id: schedule.id, medication_id: medicationId, scheduled_time: schedule.time, dose_quantity: schedule.quantity, dose_unit: stockUnit })), ...current]);
     if (dateKey(selectedDate) === dateKey(today())) setDoses((current) => [...current, ...scheduleEntries.map((schedule) => ({ id: `${schedule.id}-dose-${dateKey(today()).replaceAll('-', '')}`, medication_id: medicationId, scheduled_time: schedule.time, quantity: schedule.quantity, unit: stockUnit, status: 'pending' as const }))].sort((left, right) => left.scheduled_time.localeCompare(right.scheduled_time)));
     const continueToReminder = createReminderAfterMedication;
@@ -188,7 +227,9 @@ export function App() {
     const unit = ['Жидкость', 'Капли', 'Сироп'].includes(medication.form) ? 'мл' : 'шт.';
     const expiration = expirationDateKey(expiresOn);
     if (expiresOn && !expiration) throw new Error('Укажите существующую дату в формате ДД.ММ.ГГГГ.');
-    setPackages((current) => [{ id: packageId, medication_id: medication.id, quantity_remaining: quantity, unit, expires_on: expiration }, ...current]);
+    let nextPackage: Package = { id: packageId, medication_id: medication.id, quantity_remaining: quantity, unit, expires_on: expiration };
+    if (apiMode) nextPackage = fromApiPackage(await localApi.createPackage(medication.id, { quantity_initial: quantity, quantity_remaining: quantity, unit, expires_on: expiration }));
+    setPackages((current) => [nextPackage, ...current]);
     setPackageMedication(null);
     showNotice('Упаковка добавлена в аптечку.');
   }
@@ -199,7 +240,11 @@ export function App() {
     if (draft.expiresOn && !expiration) throw new Error('Укажите существующую дату в формате ДД.ММ.ГГГГ.');
     const stockUnit = ['Жидкость', 'Капли', 'Сироп'].includes(draft.form) ? 'мл' : 'шт.';
     const category = draft.category === 'Своя категория' ? draft.customCategory.trim() : draft.category;
-    setMedications((current) => current.map((item) => item.id === medication.id ? { ...item, name: draft.name.trim(), barcode: draft.barcode || undefined, category, form: draft.form, amount: draft.amount.trim(), unit: draft.unit, note: draft.note.trim(), purchase_reminder: draft.purchaseReminder } : item));
+    let updatedMedication: Medication = { ...medication, name: draft.name.trim(), barcode: draft.barcode || undefined, category, form: draft.form, amount: draft.amount.trim(), unit: draft.unit, note: draft.note.trim(), purchase_reminder: draft.purchaseReminder };
+    if (apiMode) {
+      updatedMedication = fromApiMedication(await localApi.updateMedication(medication.id, { name: updatedMedication.name, category: updatedMedication.category ?? null, form: updatedMedication.form, dosage_value: updatedMedication.amount || null, dosage_unit: updatedMedication.unit || null, barcode: updatedMedication.barcode ?? null, note: updatedMedication.note ?? null, purchase_reminder_enabled: Boolean(updatedMedication.purchase_reminder) }));
+    }
+    setMedications((current) => current.map((item) => item.id === medication.id ? updatedMedication : item));
     setPackages((current) => {
       const packageIndex = current.findIndex((item) => item.medication_id === medication.id);
       if (packageIndex < 0) return [{ id: makeId('pack'), medication_id: medication.id, quantity_remaining: quantity, unit: stockUnit, expires_on: expiration }, ...current];
@@ -208,7 +253,8 @@ export function App() {
     setMedicationEditor(null);
     showNotice('Карточка препарата обновлена.');
   }
-  function deleteMedication(medication: Medication) {
+  async function deleteMedication(medication: Medication) {
+    if (apiMode) await localApi.deleteMedication(medication.id);
     setMedications((current) => current.filter((item) => item.id !== medication.id));
     setPackages((current) => current.filter((item) => item.medication_id !== medication.id));
     setSchedules((current) => current.filter((item) => item.medication_id !== medication.id));
@@ -222,12 +268,13 @@ export function App() {
     const normalizedName = name.trim();
     if (!normalizedName) throw new Error('Введите название аптечки.');
     if (cabinetEditor?.mode === 'rename') {
-      setCabinets((current) => current.map((item) => item.id === cabinetEditor.cabinet.id ? { ...item, name: normalizedName } : item));
+      const updated = apiMode ? await localApi.renameCabinet(cabinetEditor.cabinet.id, normalizedName) : { id: cabinetEditor.cabinet.id, name: normalizedName };
+      setCabinets((current) => current.map((item) => item.id === updated.id ? { ...item, name: updated.name } : item));
       showNotice('Название аптечки изменено.');
     } else {
-      const cabinetId = makeId('cabinet');
-      setCabinets((current) => [...current, { id: cabinetId, name: normalizedName }]);
-      setSelectedCabinetId(cabinetId);
+      const created = apiMode ? await localApi.createCabinet(normalizedName) : { id: makeId('cabinet'), name: normalizedName };
+      setCabinets((current) => [...current, { id: created.id, name: created.name }]);
+      setSelectedCabinetId(created.id);
       showNotice('Новая аптечка создана.');
     }
     setCabinetEditor(null);
