@@ -11,6 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 class Settings(BaseSettings):
     app_name: str = "LifeCare Local API"
     database_url: str = "postgresql+psycopg://lifecare:lifecare@localhost:5432/lifecare"
+    database_url_unpooled: str | None = None
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     local_test_user_id: UUID = UUID("00000000-0000-0000-0000-000000000001")
     # Neon CLI writes managed variables to the repository-root `.env.local`.
@@ -18,7 +19,7 @@ class Settings(BaseSettings):
     # server-only and is never embedded in the browser bundle.
     model_config = SettingsConfigDict(env_file=(".env", PROJECT_ROOT / ".env.local"), extra="ignore")
 
-    @field_validator("database_url", mode="before")
+    @field_validator("database_url", "database_url_unpooled", mode="before")
     @classmethod
     def normalize_database_url(cls, value: object) -> str:
         """Accept standard PostgreSQL URLs from managed providers such as Neon."""
@@ -38,6 +39,11 @@ class Settings(BaseSettings):
     @property
     def sync_database_url(self) -> str:
         return self.database_url
+
+    @property
+    def migration_database_url(self) -> str:
+        """Prefer the provider's direct connection for schema migrations."""
+        return self.database_url_unpooled or self.database_url
 
 
 @lru_cache
