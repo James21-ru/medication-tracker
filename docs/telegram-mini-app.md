@@ -57,6 +57,41 @@ The repository includes `.github/workflows/deploy-telegram-mini-app.yml`. In the
 
 The workflow publishes the Mini App at `https://james21-ru.github.io/medication-tracker/`. Set that HTTPS address as the LifeCare bot's Menu Button / Web App URL in @BotFather after the first successful deployment.
 
+## Chat-bot reminders
+
+`telegram-chatbot` is a separate server-side Edge Function. It implements the approved notification flow without making medical recommendations:
+
+- `/start` subscribes the private Telegram chat and shows an **Открыть приложение** button;
+- at the planned time the bot sends the medication name, quantity and the two clear actions **Принял** / **Пропустить**;
+- **Принял** deducts stock using the same transaction rules as the Mini App; **Пропустить** records a skipped dose;
+- if the dose remains pending, the bot sends one follow-up after 20 minutes;
+- `/stop` immediately disables all bot messages, and `/notifications` reports the current state.
+
+The bot only becomes active after a person starts it. A schedule never creates a Telegram conversation or sends a message to an unconsenting user.
+
+Apply the migrations, set server-only secrets and deploy the function:
+
+```sh
+supabase db push
+supabase secrets set \
+  TELEGRAM_BOT_TOKEN='token-from-botfather' \
+  TELEGRAM_WEBHOOK_SECRET='long-random-webhook-secret' \
+  CHATBOT_CRON_SECRET='long-random-cron-secret' \
+  MINI_APP_URL='https://james21-ru.github.io/medication-tracker/'
+supabase functions deploy telegram-chatbot --no-verify-jwt
+```
+
+Then set Telegram's webhook from a secure machine; replace the placeholders locally and never commit the token or secrets:
+
+```sh
+curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+  -d "url=https://<project-ref>.supabase.co/functions/v1/telegram-chatbot/webhook" \
+  -d "secret_token=$TELEGRAM_WEBHOOK_SECRET" \
+  -d 'allowed_updates=["message","callback_query"]'
+```
+
+Finally, call `POST /functions/v1/telegram-chatbot/cron` once per minute with header `x-lifecare-cron-secret: <CHATBOT_CRON_SECRET>`. Use Supabase Cron, a server scheduler, or another server-owned job. The scheduler must not run in the Mini App or on a user's phone.
+
 ### Supabase Storage alternative
 
 If GitHub Pages is unavailable for the repository, create a public bucket named `lifecare-mini`. Build with `MINI_APP_BASE=/storage/v1/object/public/lifecare-mini/` and upload `dist/` into that bucket. The Mini App URL is then `https://<project-ref>.supabase.co/storage/v1/object/public/lifecare-mini/index.html`.
