@@ -22,13 +22,19 @@ class Settings(BaseSettings):
 
     @field_validator("database_url", "database_url_unpooled", mode="before")
     @classmethod
-    def normalize_database_url(cls, value: object) -> str:
+    def normalize_database_url(cls, value: object) -> str | None:
         """Accept PostgreSQL URLs copied from managed-provider dashboards.
 
         Hosting control panels sometimes preserve surrounding quotes or a
         ``DATABASE_URL=`` assignment when a value is pasted.  Accept those
         harmless variants so a deploy does not fail before the API starts.
         """
+        # ``BaseSettings`` validates optional defaults too.  Preserve a real
+        # missing DATABASE_URL_UNPOOLED rather than converting it to the
+        # literal (and invalid) SQLAlchemy URL "None".
+        if value is None:
+            return None
+
         url = str(value).strip()
         assignment = re.match(r"^(?:export\s+)?DATABASE_URL\s*[:=]\s*(.+)$", url, flags=re.IGNORECASE)
         if assignment:
