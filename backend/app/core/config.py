@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+import re
 from uuid import UUID
 
 from pydantic import field_validator
@@ -29,10 +30,12 @@ class Settings(BaseSettings):
         harmless variants so a deploy does not fail before the API starts.
         """
         url = str(value).strip()
-        if url.startswith("DATABASE_URL="):
-            url = url.removeprefix("DATABASE_URL=").strip()
-        if len(url) >= 2 and url[0] == url[-1] and url[0] in {"'", '"'}:
-            url = url[1:-1].strip()
+        assignment = re.match(r"^(?:export\s+)?DATABASE_URL\s*[:=]\s*(.+)$", url, flags=re.IGNORECASE)
+        if assignment:
+            url = assignment.group(1).strip()
+        # Dashboard copy buttons and shell snippets can add quote/backtick
+        # wrappers.  These characters are never part of a PostgreSQL URL.
+        url = url.strip(" \\t\\r\\n'\"`")
         if url.startswith("postgres://"):
             return "postgresql+psycopg://" + url.removeprefix("postgres://")
         if url.startswith("postgresql://"):
