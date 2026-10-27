@@ -3,7 +3,7 @@ from pathlib import Path
 import re
 from uuid import UUID
 
-from pydantic import field_validator
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://lifecare:lifecare@localhost:5432/lifecare"
     database_url_unpooled: str | None = None
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    # Only the API process reads this value.  Do not expose it to Vite or put
+    # it in a client-side environment variable.
+    telegram_bot_token: SecretStr | None = None
+    telegram_init_data_max_age_seconds: int = 86_400
     local_test_user_id: UUID = UUID("00000000-0000-0000-0000-000000000001")
     # Neon CLI writes managed variables to the repository-root `.env.local`.
     # The Vite app has its own nested `.env.local`, so the database URL remains

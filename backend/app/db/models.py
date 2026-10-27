@@ -74,3 +74,12 @@ class DoseEvent(TimestampedModel, Base):
     status: Mapped[str] = mapped_column(String(16), default="planned")
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class TelegramSyncState(TimestampedModel, Base):
+    """A complete local-first Mini App snapshot for one Telegram account."""
+
+    __tablename__ = "telegram_sync_states"
+    telegram_user_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

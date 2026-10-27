@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import cabinets, health, medications
+from app.api.routes import cabinets, health, medications, sync
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -19,3 +19,4 @@ app.add_api_route("/health", health.health, methods=["GET"], tags=["health"])
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(cabinets.router, prefix="/api/v1")
 app.include_router(medications.router, prefix="/api/v1")
+app.include_router(sync.router, prefix="/api/v1")

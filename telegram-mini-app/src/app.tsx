@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ApiMedication, ApiPackage, hasLocalApi, localApi } from './api';
+import { cloudSyncAvailable, syncApi, type SyncPayload } from './api';
 
 type Tab = 'doses' | 'cabinet';
 type Cabinet = { id: string; name: string };
@@ -12,7 +12,7 @@ type ScheduleDraft = { time: string; quantity: string };
 type MedicationDraft = { name: string; barcode: string; category: string; customCategory: string; form: string; amount: string; unit: string; quantity: string; expiresOn: string; note: string; purchaseReminder: boolean; schedules: ScheduleDraft[] };
 type ReminderDraft = { cabinetId: string; medicationId: string; frequency: ReminderFrequency; times: ScheduleDraft[]; startDate: string; endDate: string; weekdays: number[]; intervalDays: string; note: string; purchaseReminder: boolean };
 type PharmacyOffer = { id: string; name: string; price: string; address: string; distance: string; pickup: string; stock: string };
-type LocalData = { cabinets: Cabinet[]; medications: Medication[]; packages: Package[]; doses: Dose[]; schedules: MedicationSchedule[] };
+type LocalData = SyncPayload;
 
 const today = () => new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
 const dateKey = (date: Date) => new Intl.DateTimeFormat('en-CA').format(date);
@@ -65,14 +65,12 @@ const demoPharmacies: PharmacyOffer[] = [
 ];
 const emptyLocalData = (): LocalData => ({ cabinets: [{ id: 'cabinet-home', name: 'Домашняя аптечка' }], medications: [], packages: [], doses: [], schedules: [] });
 function readLocalData(): LocalData { try { const value = window.localStorage.getItem(localStorageKey); if (!value) return emptyLocalData(); const parsed = JSON.parse(value) as Partial<LocalData>; if (!Array.isArray(parsed.cabinets) || !Array.isArray(parsed.medications) || !Array.isArray(parsed.packages) || !Array.isArray(parsed.doses) || !Array.isArray(parsed.schedules)) return emptyLocalData(); return { cabinets: parsed.cabinets, medications: parsed.medications, packages: parsed.packages, doses: parsed.doses, schedules: parsed.schedules }; } catch { return emptyLocalData(); } }
-const fromApiMedication = (item: ApiMedication): Medication => ({ id: item.id, cabinet_id: item.cabinet_id, name: item.name, category: item.category ?? undefined, form: item.form, amount: item.dosage_value ?? '', unit: item.dosage_unit ?? 'мг', barcode: item.barcode ?? undefined, note: item.note ?? undefined, purchase_reminder: item.purchase_reminder_enabled, color: '#20A278' });
-const fromApiPackage = (item: ApiPackage): Package => ({ id: item.id, medication_id: item.medication_id, quantity_remaining: item.quantity_remaining, unit: item.unit, expires_on: item.expires_on });
 
 export function App() {
   const initialData = useMemo(readLocalData, []);
   const [tab, setTab] = useState<Tab>('doses');
-  const [loading, setLoading] = useState(hasLocalApi);
-  const [apiMode, setApiMode] = useState(false);
+  const [loading, setLoading] = useState(cloudSyncAvailable());
+  const [cloudSync, setCloudSync] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -97,34 +95,66 @@ export function App() {
   const [cabinetEditor, setCabinetEditor] = useState<{ mode: 'create' } | { mode: 'rename'; cabinet: Cabinet } | null>(null);
   const [updatingDoseId, setUpdatingDoseId] = useState<string | null>(null);
   const updatingDoseIds = useRef(new Set<string>());
+  const syncRevision = useRef<number | undefined>(undefined);
+  const syncHydrated = useRef(false);
+  const applySyncPayload = (payload: LocalData) => {
+    setCabinets(payload.cabinets);
+    setMedications(payload.medications);
+    setPackages(payload.packages);
+    setDoses(payload.doses);
+    setSchedules(payload.schedules);
+    setSelectedCabinetId((current) => payload.cabinets.some((cabinet) => cabinet.id === current) ? current : payload.cabinets[0]?.id ?? null);
+  };
   useEffect(() => {
-    if (!hasLocalApi) return;
     let cancelled = false;
-    const loadDatabase = async () => {
+    const loadCloudState = async () => {
+      if (!cloudSyncAvailable()) {
+        setLoading(false);
+        return;
+      }
       try {
-        let remoteCabinets = await localApi.listCabinets();
-        if (!remoteCabinets.length) remoteCabinets = [await localApi.createCabinet('Домашняя аптечка')];
-        const nextCabinets = remoteCabinets.map(({ id, name }) => ({ id, name }));
-        const medicationGroups = await Promise.all(nextCabinets.map((cabinet) => localApi.listMedications(cabinet.id)));
-        const nextMedications = medicationGroups.flat().map(fromApiMedication);
-        const packageGroups = await Promise.all(nextMedications.map((medication) => localApi.listPackages(medication.id)));
+        let remote = await syncApi.getState();
         if (cancelled) return;
-        setCabinets(nextCabinets);
-        setMedications(nextMedications);
-        setPackages(packageGroups.flat().map(fromApiPackage));
-        setSelectedCabinetId((current) => nextCabinets.some((cabinet) => cabinet.id === current) ? current : nextCabinets[0]?.id ?? null);
-        setApiMode(true);
-      } catch {
-        // Keep the local-first cache available if the development API is offline.
-        setApiMode(false);
+        applySyncPayload(remote.payload);
+        syncRevision.current = remote.revision;
+        syncHydrated.current = true;
+        setCloudSync(true);
+      } catch (error) {
+        // First launch in Telegram: migrate this device's existing local state
+        // into the account-owned cloud snapshot, rather than discarding it.
+        if (error instanceof Error && error.message === 'Облачных данных пока нет.') {
+          try {
+            const created = await syncApi.putState(initialData);
+            if (cancelled) return;
+            syncRevision.current = created.revision;
+            syncHydrated.current = true;
+            setCloudSync(true);
+          } catch {
+            showNotice('Не удалось включить синхронизацию. Данные остались на этом устройстве.');
+          }
+        } else {
+          showNotice('Синхронизация недоступна. Данные сохранены на этом устройстве.');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
-    void loadDatabase();
+    void loadCloudState();
     return () => { cancelled = true; };
   }, []);
   useEffect(() => { window.localStorage.setItem(localStorageKey, JSON.stringify({ cabinets, medications, packages, doses, schedules } satisfies LocalData)); }, [cabinets, medications, packages, doses, schedules]);
+  useEffect(() => {
+    if (!cloudSync || !syncHydrated.current) return;
+    const payload: LocalData = { cabinets, medications, packages, doses, schedules };
+    const timer = window.setTimeout(() => {
+      void syncApi.putState(payload, syncRevision.current).then((state) => {
+        syncRevision.current = state.revision;
+      }).catch((error: unknown) => {
+        showNotice(error instanceof Error ? `Синхронизация: ${error.message}` : 'Не удалось синхронизировать изменения.');
+      });
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [cabinets, cloudSync, doses, medications, packages, schedules]);
   const medicationById = useMemo(() => new Map(medications.map((item) => [item.id, item])), [medications]);
   const selectedCabinet = useMemo(() => cabinets.find((item) => item.id === selectedCabinetId) ?? null, [cabinets, selectedCabinetId]);
   const cabinetMedications = useMemo(() => medications.filter((item) => item.cabinet_id === selectedCabinetId), [medications, selectedCabinetId]);
@@ -141,7 +171,18 @@ export function App() {
       return materialized.length ? [...current, ...materialized] : current;
     });
   }
-  async function refreshData() { setRefreshing(true); showNotice('Данные сохранены на этом устройстве.'); window.setTimeout(() => setRefreshing(false), 180); }
+  async function refreshData() {
+    setRefreshing(true);
+    try {
+      if (!cloudSync) { showNotice('Данные сохранены на этом устройстве.'); return; }
+      const state = await syncApi.getState();
+      applySyncPayload(state.payload);
+      syncRevision.current = state.revision;
+      showNotice('Данные обновлены из облака.');
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : 'Не удалось обновить данные.');
+    } finally { setRefreshing(false); }
+  }
   async function markDose(dose: Dose, status: 'taken' | 'skipped') {
     if (dose.status !== 'pending') return;
     if (updatingDoseIds.current.has(dose.id)) return;
@@ -179,13 +220,6 @@ export function App() {
     let medicationId = `${operationId}-medication`;
     let nextMedication: Medication = { id: medicationId, cabinet_id: selectedCabinetId, name: draft.name.trim(), barcode: draft.barcode || undefined, category: draft.category === 'Своя категория' ? draft.customCategory.trim() : draft.category, form: draft.form, amount: draft.amount.trim(), unit: draft.unit, note: draft.note.trim(), purchase_reminder: draft.purchaseReminder, color: '#20A278' };
     let nextPackage: Package = { id: `${operationId}-package`, medication_id: medicationId, quantity_remaining: quantity, unit: stockUnit, expires_on: expirationDateKey(draft.expiresOn) };
-    if (apiMode) {
-      const remoteMedication = await localApi.createMedication(selectedCabinetId, { name: nextMedication.name, category: nextMedication.category ?? null, form: nextMedication.form, dosage_value: nextMedication.amount || null, dosage_unit: nextMedication.unit || null, barcode: nextMedication.barcode ?? null, note: nextMedication.note ?? null, purchase_reminder_enabled: Boolean(nextMedication.purchase_reminder) });
-      medicationId = remoteMedication.id;
-      nextMedication = fromApiMedication(remoteMedication);
-      const remotePackage = await localApi.createPackage(medicationId, { quantity_initial: quantity, quantity_remaining: quantity, unit: stockUnit, expires_on: nextPackage.expires_on });
-      nextPackage = fromApiPackage(remotePackage);
-    }
     setMedications((current) => [nextMedication, ...current]);
     setPackages((current) => [nextPackage, ...current]);
     setSchedules((current) => [...scheduleEntries.map((schedule) => ({ id: schedule.id, medication_id: medicationId, scheduled_time: schedule.time, dose_quantity: schedule.quantity, dose_unit: stockUnit })), ...current]);
@@ -228,7 +262,6 @@ export function App() {
     const expiration = expirationDateKey(expiresOn);
     if (expiresOn && !expiration) throw new Error('Укажите существующую дату в формате ДД.ММ.ГГГГ.');
     let nextPackage: Package = { id: packageId, medication_id: medication.id, quantity_remaining: quantity, unit, expires_on: expiration };
-    if (apiMode) nextPackage = fromApiPackage(await localApi.createPackage(medication.id, { quantity_initial: quantity, quantity_remaining: quantity, unit, expires_on: expiration }));
     setPackages((current) => [nextPackage, ...current]);
     setPackageMedication(null);
     showNotice('Упаковка добавлена в аптечку.');
@@ -241,9 +274,6 @@ export function App() {
     const stockUnit = ['Жидкость', 'Капли', 'Сироп'].includes(draft.form) ? 'мл' : 'шт.';
     const category = draft.category === 'Своя категория' ? draft.customCategory.trim() : draft.category;
     let updatedMedication: Medication = { ...medication, name: draft.name.trim(), barcode: draft.barcode || undefined, category, form: draft.form, amount: draft.amount.trim(), unit: draft.unit, note: draft.note.trim(), purchase_reminder: draft.purchaseReminder };
-    if (apiMode) {
-      updatedMedication = fromApiMedication(await localApi.updateMedication(medication.id, { name: updatedMedication.name, category: updatedMedication.category ?? null, form: updatedMedication.form, dosage_value: updatedMedication.amount || null, dosage_unit: updatedMedication.unit || null, barcode: updatedMedication.barcode ?? null, note: updatedMedication.note ?? null, purchase_reminder_enabled: Boolean(updatedMedication.purchase_reminder) }));
-    }
     setMedications((current) => current.map((item) => item.id === medication.id ? updatedMedication : item));
     setPackages((current) => {
       const packageIndex = current.findIndex((item) => item.medication_id === medication.id);
@@ -254,7 +284,6 @@ export function App() {
     showNotice('Карточка препарата обновлена.');
   }
   async function deleteMedication(medication: Medication) {
-    if (apiMode) await localApi.deleteMedication(medication.id);
     setMedications((current) => current.filter((item) => item.id !== medication.id));
     setPackages((current) => current.filter((item) => item.medication_id !== medication.id));
     setSchedules((current) => current.filter((item) => item.medication_id !== medication.id));
@@ -268,11 +297,11 @@ export function App() {
     const normalizedName = name.trim();
     if (!normalizedName) throw new Error('Введите название аптечки.');
     if (cabinetEditor?.mode === 'rename') {
-      const updated = apiMode ? await localApi.renameCabinet(cabinetEditor.cabinet.id, normalizedName) : { id: cabinetEditor.cabinet.id, name: normalizedName };
+      const updated = { id: cabinetEditor.cabinet.id, name: normalizedName };
       setCabinets((current) => current.map((item) => item.id === updated.id ? { ...item, name: updated.name } : item));
       showNotice('Название аптечки изменено.');
     } else {
-      const created = apiMode ? await localApi.createCabinet(normalizedName) : { id: makeId('cabinet'), name: normalizedName };
+      const created = { id: makeId('cabinet'), name: normalizedName };
       setCabinets((current) => [...current, { id: created.id, name: created.name }]);
       setSelectedCabinetId(created.id);
       showNotice('Новая аптечка создана.');

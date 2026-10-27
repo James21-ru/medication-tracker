@@ -1,4 +1,16 @@
+import { telegramApp } from './telegram';
+
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/$/, '');
+
+export type SyncPayload = {
+  cabinets: Array<{ id: string; name: string }>;
+  medications: Array<{ id: string; cabinet_id: string; name: string; category?: string; form: string; amount: string; unit: string; barcode?: string; note?: string; purchase_reminder?: boolean; color: string }>;
+  packages: Array<{ id: string; medication_id: string; quantity_remaining: number; unit: string; expires_on: string | null }>;
+  doses: Array<{ id: string; medication_id: string; scheduled_time: string; scheduled_date?: string; quantity: number; unit: string; status: 'pending' | 'taken' | 'skipped' }>;
+  schedules: Array<{ id: string; medication_id: string; scheduled_time: string; dose_quantity: number; dose_unit: string; frequency?: 'daily' | 'multiple' | 'weekdays' | 'interval' | 'as-needed'; start_date?: string; end_date?: string | null; weekdays?: number[]; interval_days?: number }>;
+};
+
+export type SyncState = { payload: SyncPayload; revision: number; updated_at: string };
 
 export type ApiCabinet = {
   id: string;
@@ -34,11 +46,12 @@ export type ApiPackage = {
 };
 
 export const hasLocalApi = Boolean(configuredBaseUrl);
+export const cloudSyncAvailable = () => Boolean(configuredBaseUrl && telegramApp()?.initData);
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}, timeoutMs = 2500): Promise<T> {
   if (!configuredBaseUrl) throw new Error('Локальный API не настроен.');
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 2500);
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`${configuredBaseUrl}${path}`, {
       ...options,
@@ -60,6 +73,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 }
 
+async function syncRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const initData = telegramApp()?.initData;
+  if (!initData) throw new Error('Откройте приложение из Telegram для синхронизации.');
+  return request<T>(path, {
+    ...options,
+    headers: { 'X-Telegram-Init-Data': initData, ...options.headers },
+  }, 10_000);
+}
+
 export const localApi = {
   listCabinets: () => request<ApiCabinet[]>('/cabinets'),
   createCabinet: (name: string) => request<ApiCabinet>('/cabinets', { method: 'POST', body: JSON.stringify({ name }) }),
@@ -70,4 +92,12 @@ export const localApi = {
   deleteMedication: (id: string) => request<void>(`/medications/${id}`, { method: 'DELETE' }),
   listPackages: (medicationId: string) => request<ApiPackage[]>(`/medications/${medicationId}/packages`),
   createPackage: (medicationId: string, payload: Pick<ApiPackage, 'quantity_initial' | 'quantity_remaining' | 'unit' | 'expires_on'>) => request<ApiPackage>(`/medications/${medicationId}/packages`, { method: 'POST', body: JSON.stringify(payload) }),
+};
+
+export const syncApi = {
+  getState: () => syncRequest<SyncState>('/sync/state'),
+  putState: (payload: SyncPayload, expectedRevision?: number) => syncRequest<SyncState>('/sync/state', {
+    method: 'PUT',
+    body: JSON.stringify({ payload, expected_revision: expectedRevision }),
+  }),
 };

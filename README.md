@@ -11,11 +11,11 @@ The detailed product decisions live in [`docs/`](docs/).
 ## Architecture
 
 - `mobile/` — Expo + React Native + TypeScript. The native client remains offline-first with SQLite.
-- `telegram-mini-app/` — React 19 + TypeScript + Vite. The Mini App keeps local storage during an endpoint-by-endpoint migration so current test flows remain fast and reliable.
-- `backend/` — new FastAPI + SQLAlchemy + Alembic API for local PostgreSQL development.
+- `telegram-mini-app/` — React 19 + TypeScript + Vite. It remains local-first and can synchronise a complete account-owned snapshot when opened from Telegram and a hosted API is configured.
+- `backend/` — FastAPI + SQLAlchemy + Alembic API for local PostgreSQL development and the optional Telegram cloud-sync endpoint.
 - `supabase/` — legacy functions/migrations, retained until the Telegram bot server flow is migrated and verified.
 
-The FastAPI database is local development infrastructure, not a cloud account system. The development API uses a fixed local owner ID; authentication and cloud sync require a separate design before remote deployment.
+The regular cabinet CRUD endpoints remain local-development infrastructure. Cloud sync uses a separate endpoint that verifies Telegram Mini App `initData` server-side and stores a complete state snapshot under that Telegram account only. The bot token must exist only as the API host's `TELEGRAM_BOT_TOKEN` secret.
 
 ## Local PostgreSQL and API
 
@@ -43,7 +43,7 @@ npm run dev
 
 Open the local Vite address that it prints (normally `http://localhost:5173`) in a desktop browser. `telegram-mini-app/.env.local` configures this local browser build to use `http://localhost:8000/api/v1`; it is intentionally ignored by Git and must never be used for a deployed Telegram Mini App.
 
-The current migration covers the cabinet data vertical: cabinets, medications and packages. Reminder schedules and dose events remain in the device cache until their corresponding API endpoints are introduced.
+For a hosted Mini App, set `VITE_API_BASE_URL` at build time to the public API URL ending in `/api/v1`. The API host also needs `DATABASE_URL`, `CORS_ORIGINS` set to the Mini App's HTTPS origin, and the `TELEGRAM_BOT_TOKEN` secret. When launched from Telegram, the client syncs cabinets, medications, packages, schedules and dose statuses as one protected snapshot. A direct browser launch intentionally stays local-only because it cannot prove which Telegram account owns the data.
 
 ## Technology
 
