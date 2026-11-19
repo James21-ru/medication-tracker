@@ -564,6 +564,8 @@ input:not([type="checkbox"]), select, textarea { font-size: 16px !important; }
 /* Reports — derived from the user's own dose marks, with a shareable export. */
 .app-shell--reports { padding-top: 0; background: #f3f4f6; }
 .reports-screen { display: grid; gap: 20px; min-height: calc(100dvh - 110px); margin: 0 -18px; padding: 42px 30px 132px; background: #f3f4f6; }
+.reports-screen--empty { align-content: start; }
+.reports-empty-state { margin-top: 92px; }
 .reports-hero > p, .report-adherence p { margin: 0; color: #1677ff; font-size: 12px; font-weight: 750; letter-spacing: 1.45px; }
 .reports-hero h1 { margin: 12px 0 8px; color: #111317; font-size: 40px; font-weight: 750; line-height: 1; letter-spacing: -1.4px; }
 .reports-hero > span { color: #70747c; font-size: 16px; }
