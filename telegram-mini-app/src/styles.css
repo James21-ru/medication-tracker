@@ -559,6 +559,42 @@ input:not([type="checkbox"]), select, textarea { font-size: 16px !important; }
   .dose-card__icon { flex-basis: 58px; width: 58px; height: 58px; }
 }
 
+/* Reports — derived from the user's own dose marks, with a shareable export. */
+.app-shell--reports { padding-top: 0; background: #f3f4f6; }
+.reports-screen { display: grid; gap: 20px; min-height: calc(100dvh - 110px); margin: 0 -18px; padding: 42px 30px 132px; background: #f3f4f6; }
+.reports-hero > p, .report-adherence p { margin: 0; color: #1677ff; font-size: 12px; font-weight: 750; letter-spacing: 1.45px; }
+.reports-hero h1 { margin: 12px 0 8px; color: #111317; font-size: 40px; font-weight: 750; line-height: 1; letter-spacing: -1.4px; }
+.reports-hero > span { color: #70747c; font-size: 16px; }
+.report-adherence { display: flex; align-items: center; gap: 14px; min-height: 168px; padding: 24px 20px 22px 26px; border-radius: 28px; background: #fff; box-shadow: 0 14px 28px rgba(38,49,65,.06); }
+.report-adherence > div { min-width: 0; flex: 1; }
+.report-adherence h2 { margin: 13px 0 14px; color: #111317; font-size: 21px; line-height: 1.14; letter-spacing: -.6px; }
+.report-adherence span { color: #70747c; font-size: 13px; }
+.report-adherence > strong { position: relative; display: grid; place-items: center; align-content: center; flex: 0 0 104px; width: 104px; height: 104px; gap: 2px; border-radius: 50%; color: #111317; background: conic-gradient(#1677ff var(--progress), #dcecff 0); font-size: 25px; letter-spacing: -1px; }
+.report-adherence > strong::before { position: absolute; inset: 10px; border-radius: 50%; background: #fff; content: ''; }
+.report-adherence > strong > span, .report-adherence > strong small { position: relative; z-index: 1; }
+.report-adherence > strong small { color: #7b8290; font-size: 10px; font-weight: 500; letter-spacing: 0; }
+.report-period { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 5px; border-radius: 19px; background: #e4e7eb; }
+.report-period button { min-height: 48px; border-radius: 15px; color: #70747c; background: transparent; font-size: 16px; font-weight: 750; }
+.report-period button.active { color: #111317; background: #fff; box-shadow: 0 2px 9px rgba(27,34,45,.11); }
+.report-chart { padding: 25px 26px 20px; border-radius: 28px; background: #fff; }
+.report-chart__header { display: flex; align-items: center; justify-content: space-between; color: #70747c; font-size: 14px; }
+.report-chart__header b { padding: 8px 10px; border-radius: 99px; color: #087c63; background: #e2f7f0; font-size: 14px; }
+.report-chart > strong { display: block; margin-top: 13px; color: #111317; font-size: 22px; letter-spacing: -.7px; }
+.report-bars { display: grid; grid-template-columns: repeat(7, 1fr); align-items: end; gap: 11px; height: 205px; margin-top: 23px; }
+.report-bars > div { display: grid; align-items: end; gap: 9px; min-width: 0; height: 100%; text-align: center; }
+.report-bars i { display: flex; align-items: end; height: 170px; overflow: hidden; border-radius: 12px; background: #eef0f3; }
+.report-bars b { display: block; width: 100%; min-height: 0; border-radius: inherit; background: #2681f6; transition: height .2s ease; }
+.report-bars span { color: #70747c; font-size: 12px; font-weight: 700; text-transform: capitalize; }
+.report-statuses { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.report-statuses article { display: grid; justify-items: center; gap: 8px; min-height: 150px; padding: 17px 8px; border-radius: 24px; background: #fff; text-align: center; }
+.report-statuses i { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; font-style: normal; font-size: 22px; }
+.report-statuses i.taken { color: #098565; background: #e1f6ef; }.report-statuses i.waiting { color: #be7900; background: #fff3d9; }.report-statuses i.skipped { color: #df4c52; background: #ffe8e9; }
+.report-statuses strong { margin-top: 3px; color: #111317; font-size: 25px; letter-spacing: -.7px; }.report-statuses span { color: #70747c; font-size: 12px; line-height: 1.15; }
+.report-insight { display: flex; gap: 14px; padding: 20px; border-radius: 25px; background: #e4f2ff; }.report-insight > i { display: grid; place-items: center; flex: 0 0 50px; width: 50px; height: 50px; border-radius: 15px; color: #1677ff; background: #fff; font-size: 24px; font-style: normal; }.report-insight strong { color: #194e80; font-size: 18px; }.report-insight p { margin: 7px 0 0; color: #567596; font-size: 14px; line-height: 1.4; }
+.report-share { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 58px; border: 1px solid #b9dcff; border-radius: 18px; color: #1677ff; background: #fff; box-shadow: 0 8px 18px rgba(43,112,190,.06); font-size: 17px; font-weight: 750; }.report-share span { font-size: 25px; line-height: 1; }
+.tabbar.tabbar--three { width: min(calc(100% - 36px), 366px); }
+@media (max-width: 360px) { .reports-screen { padding-right: 18px; padding-left: 18px; }.report-adherence { padding-right: 15px; padding-left: 18px; }.report-adherence h2 { font-size: 19px; }.report-adherence > strong { flex-basis: 88px; width: 88px; height: 88px; font-size: 21px; }.report-adherence > strong::before { inset: 9px; }.report-bars { gap: 7px; } }
+
 /* A sheet is a self-contained surface: scrolling never propagates to Telegram or the page. */
 .modal-backdrop {
   height: 100dvh;

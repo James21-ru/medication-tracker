@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cloudSyncAvailable, syncApi, type SyncPayload } from './api';
 
-type Tab = 'doses' | 'cabinet';
+type Tab = 'doses' | 'cabinet' | 'reports';
+type ReportPeriod = 'week' | 'month';
 type Cabinet = { id: string; name: string };
 type Medication = { id: string; cabinet_id: string; name: string; category?: string; form: string; amount: string; unit: string; barcode?: string; note?: string; purchase_reminder?: boolean; color: string };
 type Package = { id: string; medication_id: string; quantity_remaining: number; unit: string; expires_on: string | null };
@@ -69,6 +70,7 @@ function readLocalData(): LocalData { try { const value = window.localStorage.ge
 export function App() {
   const initialData = useMemo(readLocalData, []);
   const [tab, setTab] = useState<Tab>('doses');
+  const [reportPeriod, setReportPeriod] = useState<ReportPeriod>('week');
   const [loading, setLoading] = useState(cloudSyncAvailable());
   const [cloudSync, setCloudSync] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -309,7 +311,7 @@ export function App() {
     setCabinetEditor(null);
   }
 
-  const title = tab === 'doses' ? 'Приёмы' : selectedCabinet?.name ?? 'Аптечка';
+  const title = tab === 'doses' ? 'Приёмы' : tab === 'reports' ? 'Отчёты' : selectedCabinet?.name ?? 'Аптечка';
   const cabinetDisplayName = selectedCabinet?.name === 'Домашняя аптечка' ? 'Домашняя' : title;
   const eyebrow = tab === 'doses' ? 'СЕГОДНЯ' : 'ДОМАШНЯЯ АПТЕЧКА';
   const hasOpenSheet = Boolean(showAddMedication || reminderStart || reminderFlow || packageMedication || detailMedication || medicationEditor || medicationToDelete || pharmacyMedication || showCabinetPicker || cabinetEditor);
@@ -317,8 +319,8 @@ export function App() {
     {tab === 'cabinet' ? <header className="header header--cabinet"><div className="cabinet-heading"><p className="eyebrow">{eyebrow}</p><div className="cabinet-title-row"><h1>{cabinetDisplayName}</h1>{selectedCabinet ? <button className="cabinet-edit" onClick={() => setCabinetEditor({ mode: 'rename', cabinet: selectedCabinet })} aria-label="Переименовать аптечку">✎</button> : null}</div><p className="cabinet-summary">{cabinetMedications.length} {cabinetMedications.length === 1 ? 'препарат' : cabinetMedications.length >= 2 && cabinetMedications.length <= 4 ? 'препарата' : 'препаратов'} · всё в порядке</p></div><button className="round-button" disabled={!selectedCabinet} onClick={() => setShowAddMedication(true)} aria-label="Добавить препарат">+</button></header> : null}
     {message ? <div className="message" role="alert">{message}</div> : null}
     {notice ? <div className="notice" role="status">{notice}</div> : null}
-    {loading ? <div className="loading"><span className="loader" />Загружаем данные…</div> : tab === 'doses' ? <Doses doses={doses} medicationById={medicationById} selectedDate={selectedDate} updatingDoseId={updatingDoseId} onSelectDate={chooseDate} onMark={markDose} onCreate={() => setReminderStart(true)} /> : selectedCabinet ? <Cabinet cabinetName={selectedCabinet.name} medications={cabinetMedications} packagesByMedication={packagesByMedication} onAdd={() => setShowAddMedication(true)} onAddPackage={setPackageMedication} onOpen={setDetailMedication} onOrder={setPharmacyMedication} onChooseCabinet={() => setShowCabinetPicker(true)} /> : <CabinetEmpty onCreate={() => setCabinetEditor({ mode: 'create' })} />}
-    <nav className="tabbar tabbar--two" aria-label="Разделы"><TabButton active={tab === 'doses'} onClick={() => setTab('doses')} icon="⌂" label="Приёмы" /><TabButton active={tab === 'cabinet'} onClick={() => setTab('cabinet')} icon="▰" label="Аптечка" /></nav>
+    {loading ? <div className="loading"><span className="loader" />Загружаем данные…</div> : tab === 'doses' ? <Doses doses={doses} medicationById={medicationById} selectedDate={selectedDate} updatingDoseId={updatingDoseId} onSelectDate={chooseDate} onMark={markDose} onCreate={() => setReminderStart(true)} /> : tab === 'reports' ? <Reports doses={doses} period={reportPeriod} onPeriodChange={setReportPeriod} onNotice={showNotice} /> : selectedCabinet ? <Cabinet cabinetName={selectedCabinet.name} medications={cabinetMedications} packagesByMedication={packagesByMedication} onAdd={() => setShowAddMedication(true)} onAddPackage={setPackageMedication} onOpen={setDetailMedication} onOrder={setPharmacyMedication} onChooseCabinet={() => setShowCabinetPicker(true)} /> : <CabinetEmpty onCreate={() => setCabinetEditor({ mode: 'create' })} />}
+    <nav className="tabbar tabbar--three" aria-label="Разделы"><TabButton active={tab === 'doses'} onClick={() => setTab('doses')} icon="⌂" label="Приёмы" /><TabButton active={tab === 'cabinet'} onClick={() => setTab('cabinet')} icon="▰" label="Аптечка" /><TabButton active={tab === 'reports'} onClick={() => setTab('reports')} icon="▥" label="Отчёты" /></nav>
     {showAddMedication ? <AddMedication onClose={() => setShowAddMedication(false)} onSubmit={addMedication} /> : null}
     {reminderStart ? <ReminderStart onClose={() => setReminderStart(false)} onNewMedication={() => { setReminderStart(false); setCreateReminderAfterMedication(true); setShowAddMedication(true); }} onFromCabinet={() => { setReminderStart(false); setReminderFlow({}); }} /> : null}
     {reminderFlow ? <ReminderFlow initial={reminderFlow} cabinets={cabinets} medications={medications} packagesByMedication={packagesByMedication} selectedDate={selectedDate} onClose={() => setReminderFlow(null)} onSave={saveReminder} /> : null}
@@ -399,6 +401,42 @@ function Calendar({ selectedDate, onSelect }: { selectedDate: Date; onSelect: (d
 
 function NextDose({ dose, medication, canMark, isUpdating, onMark }: { dose: Dose; medication?: Medication; canMark: boolean; isUpdating: boolean; onMark: (dose: Dose, status: 'taken' | 'skipped') => Promise<void> }) { return <article className="next-dose"><p>{canMark ? 'СЛЕДУЮЩИЙ ПРИЁМ' : 'ЗАПЛАНИРОВАНО'}</p><div className="next-dose__title"><span><strong>{medication?.name ?? 'Препарат'}</strong><small>{medication ? medicationDescription(medication) : `${dose.quantity} ${dose.unit}`}</small></span><time>{dose.scheduled_time.slice(0, 5)}</time></div>{canMark ? <><button disabled={isUpdating} onClick={() => void onMark(dose, 'taken')}>{isUpdating ? 'Отмечаем…' : 'Принять сейчас'}</button><button className="text-button" disabled={isUpdating} onClick={() => void onMark(dose, 'skipped')}>Пропустить</button></> : <p className="next-dose__notice">Отметить приём можно в назначенный день.</p>}</article>; }
 function DoseRow({ dose, medication, canMark, isUpdating, onMark }: { dose: Dose; medication?: Medication; canMark: boolean; isUpdating: boolean; onMark: (dose: Dose, status: 'taken' | 'skipped') => Promise<void> }) { return <article className="dose-row"><time>{dose.scheduled_time.slice(0, 5)}</time><span className="med-icon med-icon--small" style={{ background: medication?.color ?? '#20A278' }}>◉</span><div><strong>{medication?.name ?? 'Препарат'}</strong><small>{dose.quantity} {dose.unit}</small></div>{dose.status === 'pending' ? canMark ? <button disabled={isUpdating} onClick={() => void onMark(dose, 'taken')} aria-label="Отметить принятым">{isUpdating ? '…' : '✓'}</button> : <span className="dose-status">Запланировано</span> : <span className={`dose-status ${dose.status}`}>{dose.status === 'taken' ? 'Принято' : 'Пропущено'}</span>}</article>; }
+
+function Reports({ doses, period, onPeriodChange, onNotice }: { doses: Dose[]; period: ReportPeriod; onPeriodChange: (period: ReportPeriod) => void; onNotice: (message: string) => void }) {
+  const daysInPeriod = period === 'week' ? 7 : 30;
+  const end = today();
+  const start = addDays(end, -(daysInPeriod - 1));
+  const inPeriod = doses.filter((dose) => !dose.scheduled_date || (dose.scheduled_date >= dateKey(start) && dose.scheduled_date <= dateKey(end)));
+  const taken = inPeriod.filter((dose) => dose.status === 'taken').length;
+  const skipped = inPeriod.filter((dose) => dose.status === 'skipped').length;
+  const waiting = inPeriod.filter((dose) => dose.status === 'pending').length;
+  const adherence = inPeriod.length ? Math.round((taken / inPeriod.length) * 100) : 0;
+  const chart = Array.from({ length: 7 }, (_, index) => {
+    const day = addDays(end, index - 6);
+    const key = dateKey(day);
+    const dayDoses = inPeriod.filter((dose) => dose.scheduled_date === key || (!dose.scheduled_date && key === dateKey(end)));
+    const value = dayDoses.length ? Math.round((dayDoses.filter((dose) => dose.status === 'taken').length / dayDoses.length) * 100) : 0;
+    return { key, label: new Intl.DateTimeFormat('ru-RU', { weekday: 'short' }).format(day).replace('.', '').slice(0, 2), value };
+  });
+  const share = async () => {
+    const text = [`Умная аптечка — отчёт ${period === 'week' ? 'за неделю' : 'за месяц'}`, `Период: ${start.toLocaleDateString('ru-RU')} — ${end.toLocaleDateString('ru-RU')}`, `Регулярность: ${adherence}%`, `Всего приёмов: ${inPeriod.length}`, `Вовремя: ${taken}`, `Ожидают отметки: ${waiting}`, `Пропущено: ${skipped}`].join('\n');
+    const file = new File([text], `otchet-${period === 'week' ? 'nedelya' : 'mesyac'}.txt`, { type: 'text/plain;charset=utf-8' });
+    try {
+      if (navigator.canShare?.({ files: [file] })) { await navigator.share({ title: 'Отчёт о приёмах', text, files: [file] }); return; }
+      const url = URL.createObjectURL(file); const anchor = document.createElement('a'); anchor.href = url; anchor.download = file.name; anchor.click(); URL.revokeObjectURL(url);
+      onNotice('Отчёт скачан. Его можно отправить из загрузок.');
+    } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) onNotice('Не удалось открыть отправку отчёта. Попробуйте ещё раз.'); }
+  };
+  return <section className="reports-screen">
+    <header className="reports-hero"><p>ЗДОРОВЬЕ В ДИНАМИКЕ</p><h1>Отчёты</h1><span>Следите за регулярностью приёмов</span></header>
+    <section className="report-adherence"><div><p>ГЛАВНЫЙ ПОКАЗАТЕЛЬ</p><h2>Регулярность приёма лекарств</h2><span>{taken} из {inPeriod.length} приёмов выполнено</span></div><strong aria-label={`Регулярность ${adherence}%`} style={{ '--progress': `${adherence * 3.6}deg` } as React.CSSProperties}><span>{adherence}%</span><small>регулярность</small></strong></section>
+    <div className="report-period" role="tablist" aria-label="Период отчёта"><button role="tab" aria-selected={period === 'week'} className={period === 'week' ? 'active' : ''} onClick={() => onPeriodChange('week')}>Неделя</button><button role="tab" aria-selected={period === 'month'} className={period === 'month' ? 'active' : ''} onClick={() => onPeriodChange('month')}>Месяц</button></div>
+    <section className="report-chart"><div className="report-chart__header"><span>Регулярность</span><b>{adherence}%</b></div><strong>{taken} из {inPeriod.length} приёмов</strong><div className="report-bars" aria-label="График регулярности по дням">{chart.map((item) => <div key={item.key}><i><b style={{ height: `${item.value}%` }} /></i><span>{item.label}</span></div>)}</div></section>
+    <section className="report-statuses" aria-label="Статистика отметок"><article><i className="taken">✓</i><strong>{taken}</strong><span>Вовремя</span></article><article><i className="waiting">◷</i><strong>{waiting}</strong><span>Ожидают отметки</span></article><article><i className="skipped">×</i><strong>{skipped}</strong><span>Пропущено</span></article></section>
+    <section className="report-insight"><i>▥</i><div><strong>{adherence >= 80 ? 'Хороший прогресс' : inPeriod.length ? 'Есть запас для улучшения' : 'Пока нет данных'}</strong><p>{inPeriod.length ? `За выбранный период отмечено ${taken} из ${inPeriod.length} приёмов. Продолжайте отмечать приёмы, чтобы видеть динамику.` : 'Добавьте и отмечайте приёмы, чтобы здесь появилась динамика.'}</p></div></section>
+    <button className="report-share" onClick={() => void share()}><span aria-hidden="true">⇧</span>Поделиться отчётом</button>
+  </section>;
+}
 
 function Cabinet({ cabinetName, medications, packagesByMedication, onAdd, onAddPackage, onOpen, onOrder, onChooseCabinet }: { cabinetName: string; medications: Medication[]; packagesByMedication: Map<string, Package[]>; onAdd: () => void; onAddPackage: (medication: Medication) => void; onOpen: (medication: Medication) => void; onOrder: (medication: Medication) => void; onChooseCabinet: () => void }) {
   const [query, setQuery] = useState('');
