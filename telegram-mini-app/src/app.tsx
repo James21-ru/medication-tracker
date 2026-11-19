@@ -319,7 +319,7 @@ export function App() {
     {tab === 'cabinet' ? <header className="header header--cabinet"><div className="cabinet-heading"><p className="eyebrow">{eyebrow}</p><div className="cabinet-title-row"><h1>{cabinetDisplayName}</h1>{selectedCabinet ? <button className="cabinet-edit" onClick={() => setCabinetEditor({ mode: 'rename', cabinet: selectedCabinet })} aria-label="Переименовать аптечку">✎</button> : null}</div><p className="cabinet-summary">{cabinetMedications.length} {cabinetMedications.length === 1 ? 'препарат' : cabinetMedications.length >= 2 && cabinetMedications.length <= 4 ? 'препарата' : 'препаратов'} · всё в порядке</p></div><button className="round-button" disabled={!selectedCabinet} onClick={() => setShowAddMedication(true)} aria-label="Добавить препарат">+</button></header> : null}
     {message ? <div className="message" role="alert">{message}</div> : null}
     {notice ? <div className="notice" role="status">{notice}</div> : null}
-    {loading ? <div className="loading"><span className="loader" />Загружаем данные…</div> : tab === 'doses' ? <Doses doses={doses} medicationById={medicationById} selectedDate={selectedDate} updatingDoseId={updatingDoseId} onSelectDate={chooseDate} onMark={markDose} onCreate={() => setReminderStart(true)} /> : tab === 'reports' ? <Reports doses={doses} period={reportPeriod} onPeriodChange={setReportPeriod} onNotice={showNotice} /> : selectedCabinet ? <Cabinet cabinetName={selectedCabinet.name} medications={cabinetMedications} packagesByMedication={packagesByMedication} onAdd={() => setShowAddMedication(true)} onAddPackage={setPackageMedication} onOpen={setDetailMedication} onOrder={setPharmacyMedication} onChooseCabinet={() => setShowCabinetPicker(true)} /> : <CabinetEmpty onCreate={() => setCabinetEditor({ mode: 'create' })} />}
+    {loading ? <div className="loading"><span className="loader" />Загружаем данные…</div> : tab === 'doses' ? <Doses doses={doses} medicationById={medicationById} selectedDate={selectedDate} updatingDoseId={updatingDoseId} onSelectDate={chooseDate} onMark={markDose} onCreate={() => setReminderStart(true)} /> : tab === 'reports' ? <Reports doses={doses} medicationById={medicationById} period={reportPeriod} onPeriodChange={setReportPeriod} onNotice={showNotice} /> : selectedCabinet ? <Cabinet cabinetName={selectedCabinet.name} medications={cabinetMedications} packagesByMedication={packagesByMedication} onAdd={() => setShowAddMedication(true)} onAddPackage={setPackageMedication} onOpen={setDetailMedication} onOrder={setPharmacyMedication} onChooseCabinet={() => setShowCabinetPicker(true)} /> : <CabinetEmpty onCreate={() => setCabinetEditor({ mode: 'create' })} />}
     <nav className="tabbar tabbar--three" aria-label="Разделы"><TabButton active={tab === 'doses'} onClick={() => setTab('doses')} icon="⌂" label="Приёмы" /><TabButton active={tab === 'cabinet'} onClick={() => setTab('cabinet')} icon="▰" label="Аптечка" /><TabButton active={tab === 'reports'} onClick={() => setTab('reports')} icon="▥" label="Отчёты" /></nav>
     {showAddMedication ? <AddMedication onClose={() => setShowAddMedication(false)} onSubmit={addMedication} /> : null}
     {reminderStart ? <ReminderStart onClose={() => setReminderStart(false)} onNewMedication={() => { setReminderStart(false); setCreateReminderAfterMedication(true); setShowAddMedication(true); }} onFromCabinet={() => { setReminderStart(false); setReminderFlow({}); }} /> : null}
@@ -402,7 +402,7 @@ function Calendar({ selectedDate, onSelect }: { selectedDate: Date; onSelect: (d
 function NextDose({ dose, medication, canMark, isUpdating, onMark }: { dose: Dose; medication?: Medication; canMark: boolean; isUpdating: boolean; onMark: (dose: Dose, status: 'taken' | 'skipped') => Promise<void> }) { return <article className="next-dose"><p>{canMark ? 'СЛЕДУЮЩИЙ ПРИЁМ' : 'ЗАПЛАНИРОВАНО'}</p><div className="next-dose__title"><span><strong>{medication?.name ?? 'Препарат'}</strong><small>{medication ? medicationDescription(medication) : `${dose.quantity} ${dose.unit}`}</small></span><time>{dose.scheduled_time.slice(0, 5)}</time></div>{canMark ? <><button disabled={isUpdating} onClick={() => void onMark(dose, 'taken')}>{isUpdating ? 'Отмечаем…' : 'Принять сейчас'}</button><button className="text-button" disabled={isUpdating} onClick={() => void onMark(dose, 'skipped')}>Пропустить</button></> : <p className="next-dose__notice">Отметить приём можно в назначенный день.</p>}</article>; }
 function DoseRow({ dose, medication, canMark, isUpdating, onMark }: { dose: Dose; medication?: Medication; canMark: boolean; isUpdating: boolean; onMark: (dose: Dose, status: 'taken' | 'skipped') => Promise<void> }) { return <article className="dose-row"><time>{dose.scheduled_time.slice(0, 5)}</time><span className="med-icon med-icon--small" style={{ background: medication?.color ?? '#20A278' }}>◉</span><div><strong>{medication?.name ?? 'Препарат'}</strong><small>{dose.quantity} {dose.unit}</small></div>{dose.status === 'pending' ? canMark ? <button disabled={isUpdating} onClick={() => void onMark(dose, 'taken')} aria-label="Отметить принятым">{isUpdating ? '…' : '✓'}</button> : <span className="dose-status">Запланировано</span> : <span className={`dose-status ${dose.status}`}>{dose.status === 'taken' ? 'Принято' : 'Пропущено'}</span>}</article>; }
 
-function Reports({ doses, period, onPeriodChange, onNotice }: { doses: Dose[]; period: ReportPeriod; onPeriodChange: (period: ReportPeriod) => void; onNotice: (message: string) => void }) {
+function Reports({ doses, medicationById, period, onPeriodChange, onNotice }: { doses: Dose[]; medicationById: Map<string, Medication>; period: ReportPeriod; onPeriodChange: (period: ReportPeriod) => void; onNotice: (message: string) => void }) {
   const daysInPeriod = period === 'week' ? 7 : 30;
   const end = today();
   const start = addDays(end, -(daysInPeriod - 1));
@@ -418,10 +418,18 @@ function Reports({ doses, period, onPeriodChange, onNotice }: { doses: Dose[]; p
     const value = dayDoses.length ? Math.round((dayDoses.filter((dose) => dose.status === 'taken').length / dayDoses.length) * 100) : 0;
     return { key, label: new Intl.DateTimeFormat('ru-RU', { weekday: 'short' }).format(day).replace('.', '').slice(0, 2), value };
   });
+  const medications = Array.from(new Set(inPeriod.map((dose) => dose.medication_id))).map((medicationId) => {
+    const medicationDoses = inPeriod.filter((dose) => dose.medication_id === medicationId);
+    const medication = medicationById.get(medicationId);
+    const medicationTaken = medicationDoses.filter((dose) => dose.status === 'taken').length;
+    const medicationSkipped = medicationDoses.filter((dose) => dose.status === 'skipped').length;
+    const medicationWaiting = medicationDoses.filter((dose) => dose.status === 'pending').length;
+    return { name: medication?.name ?? 'Препарат', description: medication ? medicationDescription(medication) : '', total: medicationDoses.length, taken: medicationTaken, skipped: medicationSkipped, waiting: medicationWaiting, adherence: medicationDoses.length ? Math.round((medicationTaken / medicationDoses.length) * 100) : 0 };
+  }).sort((left, right) => left.name.localeCompare(right.name, 'ru'));
   const share = async () => {
     try {
       const text = `Умная аптечка — PDF-отчёт за ${period === 'week' ? 'неделю' : 'месяц'}. Регулярность: ${adherence}%.`;
-      const file = await createReportPdf({ period, start, end, adherence, total: inPeriod.length, taken, waiting, skipped, chart });
+      const file = await createReportPdf({ period, start, end, adherence, total: inPeriod.length, taken, waiting, skipped, medications });
       if (navigator.canShare?.({ files: [file] })) { await navigator.share({ title: 'Отчёт о приёмах', text, files: [file] }); return; }
       const url = URL.createObjectURL(file); const anchor = document.createElement('a'); anchor.href = url; anchor.download = file.name; anchor.click(); URL.revokeObjectURL(url);
       onNotice('PDF-отчёт скачан. Его можно отправить из загрузок.');
@@ -438,7 +446,8 @@ function Reports({ doses, period, onPeriodChange, onNotice }: { doses: Dose[]; p
   </section>;
 }
 
-type ReportPdfData = { period: ReportPeriod; start: Date; end: Date; adherence: number; total: number; taken: number; waiting: number; skipped: number; chart: { key: string; label: string; value: number }[] };
+type MedicationReportRow = { name: string; description: string; total: number; taken: number; skipped: number; waiting: number; adherence: number };
+type ReportPdfData = { period: ReportPeriod; start: Date; end: Date; adherence: number; total: number; taken: number; waiting: number; skipped: number; medications: MedicationReportRow[] };
 
 function escapeSvg(value: string) { return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[character] ?? character); }
 
@@ -448,49 +457,45 @@ async function createReportPdf(data: ReportPdfData) {
   const height = 1280;
   const periodLabel = data.period === 'week' ? 'неделю' : 'месяц';
   const dateRange = `${data.start.toLocaleDateString('ru-RU')} — ${data.end.toLocaleDateString('ru-RU')}`;
-  const chart = data.chart.map((item, index) => {
-    const x = 80 + index * 108;
-    const barHeight = Math.max(8, Math.round(item.value * 1.65));
-    return `<rect x="${x}" y="${780 - barHeight}" width="66" height="${barHeight}" rx="14" fill="#2581F5"/><text x="${x + 33}" y="820" text-anchor="middle" class="label">${escapeSvg(item.label)}</text>`;
-  }).join('');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-    <style>.title{font-family:Arial,sans-serif;fill:#111317;font-weight:700}.body{font-family:Arial,sans-serif;fill:#70747c}.label{font-family:Arial,sans-serif;fill:#70747c;font-size:22px;font-weight:700}.eyebrow{font-family:Arial,sans-serif;fill:#1677ff;font-size:22px;font-weight:700;letter-spacing:3px}</style>
-    <rect width="900" height="1280" fill="#F3F4F6"/>
-    <text x="64" y="82" class="eyebrow">УМНАЯ АПТЕЧКА</text>
-    <text x="64" y="145" class="title" font-size="52">Отчёт за ${periodLabel}</text>
-    <text x="64" y="184" class="body" font-size="24">${escapeSvg(dateRange)}</text>
-    <rect x="56" y="230" width="788" height="244" rx="32" fill="#FFFFFF"/>
-    <text x="88" y="278" class="eyebrow" font-size="18">ГЛАВНЫЙ ПОКАЗАТЕЛЬ</text>
-    <text x="88" y="330" class="title" font-size="31">Регулярность приёма</text>
-    <text x="88" y="368" class="title" font-size="31">лекарств</text>
-    <text x="88" y="423" class="body" font-size="22">${data.taken} из ${data.total} приёмов выполнено</text>
-    <circle cx="730" cy="350" r="81" fill="none" stroke="#DCEBFF" stroke-width="20"/>
-    <circle cx="730" cy="350" r="81" fill="none" stroke="#1677FF" stroke-width="20" stroke-linecap="round" stroke-dasharray="${Math.max(1, data.adherence * 5.09)} 510" transform="rotate(-90 730 350)"/>
-    <text x="730" y="357" text-anchor="middle" class="title" font-size="38">${data.adherence}%</text>
-    <text x="730" y="387" text-anchor="middle" class="body" font-size="16">регулярность</text>
-    <rect x="56" y="514" width="788" height="370" rx="32" fill="#FFFFFF"/>
-    <text x="88" y="562" class="body" font-size="22">Регулярность по дням</text>
-    <text x="88" y="610" class="title" font-size="34">${data.taken} из ${data.total} приёмов</text>
-    ${chart}
-    <rect x="56" y="924" width="244" height="170" rx="26" fill="#FFFFFF"/><rect x="74" y="944" width="50" height="50" rx="15" fill="#E1F6EF"/><text x="99" y="979" text-anchor="middle" class="title" font-size="28" fill="#098565">✓</text><text x="178" y="1001" text-anchor="middle" class="title" font-size="40">${data.taken}</text><text x="178" y="1043" text-anchor="middle" class="body" font-size="19">Вовремя</text>
-    <rect x="328" y="924" width="244" height="170" rx="26" fill="#FFFFFF"/><rect x="346" y="944" width="50" height="50" rx="15" fill="#FFF3D9"/><text x="371" y="979" text-anchor="middle" class="title" font-size="28" fill="#BE7900">◷</text><text x="450" y="1001" text-anchor="middle" class="title" font-size="40">${data.waiting}</text><text x="450" y="1043" text-anchor="middle" class="body" font-size="19">Ожидают отметки</text>
-    <rect x="600" y="924" width="244" height="170" rx="26" fill="#FFFFFF"/><rect x="618" y="944" width="50" height="50" rx="15" fill="#FFE8E9"/><text x="643" y="979" text-anchor="middle" class="title" font-size="28" fill="#DF4C52">×</text><text x="722" y="1001" text-anchor="middle" class="title" font-size="40">${data.skipped}</text><text x="722" y="1043" text-anchor="middle" class="body" font-size="19">Пропущено</text>
-    <rect x="56" y="1134" width="788" height="86" rx="24" fill="#E4F2FF"/><text x="88" y="1188" class="title" font-size="24" fill="#194E80">Отчёт сформирован в «Умной аптечке»</text>
-  </svg>`;
-  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const element = new Image();
-    element.onload = () => resolve(element);
-    element.onerror = () => reject(new Error('Не удалось собрать изображение отчёта'));
-    element.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-  });
-  const canvas = document.createElement('canvas');
-  canvas.width = width * 2;
-  canvas.height = height * 2;
-  const context = canvas.getContext('2d');
-  if (!context) throw new Error('Не удалось подготовить PDF');
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4', compress: true });
-  pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight(), 'lifecare-report', 'FAST');
+  const rows = data.medications.length ? data.medications : [{ name: 'Нет приёмов за выбранный период', description: 'Добавьте приём, чтобы увидеть статистику', total: 0, taken: 0, skipped: 0, waiting: 0, adherence: 0 }];
+  const pages = Array.from({ length: Math.ceil(rows.length / 5) }, (_, index) => rows.slice(index * 5, (index + 1) * 5));
+  for (const [pageIndex, pageRows] of pages.entries()) {
+    const isFirstPage = pageIndex === 0;
+    const tableTop = isFirstPage ? 540 : 230;
+    const rowsSvg = pageRows.map((row, index) => {
+      const y = tableTop + 86 + index * 118;
+      const name = row.name.length > 27 ? `${row.name.slice(0, 26)}…` : row.name;
+      const description = row.description.length > 31 ? `${row.description.slice(0, 30)}…` : row.description;
+      return `<line x1="56" y1="${y + 68}" x2="844" y2="${y + 68}" stroke="#DCE1E8"/><text x="80" y="${y}" class="title" font-size="23">${escapeSvg(name)}</text><text x="80" y="${y + 29}" class="body" font-size="17">${escapeSvg(description)}</text><text x="440" y="${y + 12}" class="number" text-anchor="middle">${row.total}</text><text x="530" y="${y + 12}" class="green" text-anchor="middle">${row.taken}</text><text x="620" y="${y + 12}" class="red" text-anchor="middle">${row.skipped}</text><text x="710" y="${y + 12}" class="number" text-anchor="middle">${row.waiting}</text><text x="804" y="${y + 12}" class="number" text-anchor="middle">${row.adherence}%</text>`;
+    }).join('');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <style>.title{font-family:Arial,sans-serif;fill:#111317;font-weight:700}.body{font-family:Arial,sans-serif;fill:#70747c}.number{font-family:Arial,sans-serif;fill:#1D2938;font-size:22px}.green{font-family:Arial,sans-serif;fill:#078563;font-size:22px}.red{font-family:Arial,sans-serif;fill:#D65A46;font-size:22px}.label{font-family:Arial,sans-serif;fill:#A2B6D1;font-size:16px;font-weight:700;letter-spacing:1px}.eyebrow{font-family:Arial,sans-serif;fill:#1677FF;font-size:20px;font-weight:700;letter-spacing:3px}</style>
+      <rect width="900" height="1280" fill="#F3F4F6"/>
+      <text x="64" y="82" class="eyebrow">УМНАЯ АПТЕЧКА</text>
+      <text x="64" y="145" class="title" font-size="50">Отчёт по препаратам</text>
+      <text x="64" y="184" class="body" font-size="23">Период: ${escapeSvg(dateRange)}</text>
+      ${isFirstPage ? `<rect x="56" y="230" width="788" height="210" rx="32" fill="#FFFFFF"/><text x="88" y="277" class="label">ОБЩАЯ СТАТИСТИКА</text><text x="92" y="354" class="eyebrow" font-size="42">${data.adherence}%</text><text x="92" y="391" class="body" font-size="18">регулярность</text><text x="288" y="354" class="title" font-size="42">${data.total}</text><text x="288" y="391" class="body" font-size="18">запланировано</text><text x="490" y="354" class="green" font-size="42">${data.taken}</text><text x="490" y="391" class="body" font-size="18">принято</text><text x="685" y="354" class="red" font-size="42">${data.skipped}</text><text x="685" y="391" class="body" font-size="18">пропущено</text>` : `<text x="64" y="184" class="body" font-size="20">Продолжение · препараты ${pageIndex * 5 + 1}–${pageIndex * 5 + pageRows.length}</text>`}
+      <text x="64" y="${tableTop - 32}" class="title" font-size="32">По препаратам</text>
+      <text x="80" y="${tableTop}" class="label">ПРЕПАРАТ</text><text x="440" y="${tableTop}" class="label" text-anchor="middle">ПЛАН</text><text x="530" y="${tableTop}" class="label" text-anchor="middle">ПРИНЯТО</text><text x="620" y="${tableTop}" class="label" text-anchor="middle">ПРОПУЩЕНО</text><text x="710" y="${tableTop}" class="label" text-anchor="middle">ОЖИДАЕТ</text><text x="804" y="${tableTop}" class="label" text-anchor="middle">РЕГ.</text><line x1="56" y1="${tableTop + 24}" x2="844" y2="${tableTop + 24}" stroke="#C9D6E7"/>
+      ${rowsSvg}
+      <rect x="56" y="1160" width="788" height="64" rx="20" fill="#E4F2FF"/><text x="88" y="1201" class="body" font-size="18">Сведения основаны на отметках в «Умной аптечке».</text>
+    </svg>`;
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error('Не удалось собрать изображение отчёта'));
+      element.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = width * 2;
+    canvas.height = height * 2;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Не удалось подготовить PDF');
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    if (pageIndex) pdf.addPage();
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight(), `lifecare-report-${pageIndex}`, 'FAST');
+  }
   return new File([pdf.output('blob')], `otchet-${data.period === 'week' ? 'nedelya' : 'mesyac'}.pdf`, { type: 'application/pdf' });
 }
 
