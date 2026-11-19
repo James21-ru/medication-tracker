@@ -419,13 +419,13 @@ function Reports({ doses, period, onPeriodChange, onNotice }: { doses: Dose[]; p
     return { key, label: new Intl.DateTimeFormat('ru-RU', { weekday: 'short' }).format(day).replace('.', '').slice(0, 2), value };
   });
   const share = async () => {
-    const text = [`Умная аптечка — отчёт ${period === 'week' ? 'за неделю' : 'за месяц'}`, `Период: ${start.toLocaleDateString('ru-RU')} — ${end.toLocaleDateString('ru-RU')}`, `Регулярность: ${adherence}%`, `Всего приёмов: ${inPeriod.length}`, `Вовремя: ${taken}`, `Ожидают отметки: ${waiting}`, `Пропущено: ${skipped}`].join('\n');
-    const file = new File([text], `otchet-${period === 'week' ? 'nedelya' : 'mesyac'}.txt`, { type: 'text/plain;charset=utf-8' });
     try {
+      const text = `Умная аптечка — PDF-отчёт за ${period === 'week' ? 'неделю' : 'месяц'}. Регулярность: ${adherence}%.`;
+      const file = await createReportPdf({ period, start, end, adherence, total: inPeriod.length, taken, waiting, skipped, chart });
       if (navigator.canShare?.({ files: [file] })) { await navigator.share({ title: 'Отчёт о приёмах', text, files: [file] }); return; }
       const url = URL.createObjectURL(file); const anchor = document.createElement('a'); anchor.href = url; anchor.download = file.name; anchor.click(); URL.revokeObjectURL(url);
-      onNotice('Отчёт скачан. Его можно отправить из загрузок.');
-    } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) onNotice('Не удалось открыть отправку отчёта. Попробуйте ещё раз.'); }
+      onNotice('PDF-отчёт скачан. Его можно отправить из загрузок.');
+    } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) onNotice('Не удалось подготовить PDF-отчёт. Попробуйте ещё раз.'); }
   };
   return <section className="reports-screen">
     <header className="reports-hero"><p>ЗДОРОВЬЕ В ДИНАМИКЕ</p><h1>Отчёты</h1><span>Следите за регулярностью приёмов</span></header>
@@ -436,6 +436,62 @@ function Reports({ doses, period, onPeriodChange, onNotice }: { doses: Dose[]; p
     <section className="report-insight"><i>▥</i><div><strong>{adherence >= 80 ? 'Хороший прогресс' : inPeriod.length ? 'Есть запас для улучшения' : 'Пока нет данных'}</strong><p>{inPeriod.length ? `За выбранный период отмечено ${taken} из ${inPeriod.length} приёмов. Продолжайте отмечать приёмы, чтобы видеть динамику.` : 'Добавьте и отмечайте приёмы, чтобы здесь появилась динамика.'}</p></div></section>
     <button className="report-share" onClick={() => void share()}><span aria-hidden="true">⇧</span>Поделиться отчётом</button>
   </section>;
+}
+
+type ReportPdfData = { period: ReportPeriod; start: Date; end: Date; adherence: number; total: number; taken: number; waiting: number; skipped: number; chart: { key: string; label: string; value: number }[] };
+
+function escapeSvg(value: string) { return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[character] ?? character); }
+
+async function createReportPdf(data: ReportPdfData) {
+  const { jsPDF } = await import('jspdf');
+  const width = 900;
+  const height = 1280;
+  const periodLabel = data.period === 'week' ? 'неделю' : 'месяц';
+  const dateRange = `${data.start.toLocaleDateString('ru-RU')} — ${data.end.toLocaleDateString('ru-RU')}`;
+  const chart = data.chart.map((item, index) => {
+    const x = 80 + index * 108;
+    const barHeight = Math.max(8, Math.round(item.value * 1.65));
+    return `<rect x="${x}" y="${780 - barHeight}" width="66" height="${barHeight}" rx="14" fill="#2581F5"/><text x="${x + 33}" y="820" text-anchor="middle" class="label">${escapeSvg(item.label)}</text>`;
+  }).join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <style>.title{font-family:Arial,sans-serif;fill:#111317;font-weight:700}.body{font-family:Arial,sans-serif;fill:#70747c}.label{font-family:Arial,sans-serif;fill:#70747c;font-size:22px;font-weight:700}.eyebrow{font-family:Arial,sans-serif;fill:#1677ff;font-size:22px;font-weight:700;letter-spacing:3px}</style>
+    <rect width="900" height="1280" fill="#F3F4F6"/>
+    <text x="64" y="82" class="eyebrow">УМНАЯ АПТЕЧКА</text>
+    <text x="64" y="145" class="title" font-size="52">Отчёт за ${periodLabel}</text>
+    <text x="64" y="184" class="body" font-size="24">${escapeSvg(dateRange)}</text>
+    <rect x="56" y="230" width="788" height="244" rx="32" fill="#FFFFFF"/>
+    <text x="88" y="278" class="eyebrow" font-size="18">ГЛАВНЫЙ ПОКАЗАТЕЛЬ</text>
+    <text x="88" y="330" class="title" font-size="31">Регулярность приёма</text>
+    <text x="88" y="368" class="title" font-size="31">лекарств</text>
+    <text x="88" y="423" class="body" font-size="22">${data.taken} из ${data.total} приёмов выполнено</text>
+    <circle cx="730" cy="350" r="81" fill="none" stroke="#DCEBFF" stroke-width="20"/>
+    <circle cx="730" cy="350" r="81" fill="none" stroke="#1677FF" stroke-width="20" stroke-linecap="round" stroke-dasharray="${Math.max(1, data.adherence * 5.09)} 510" transform="rotate(-90 730 350)"/>
+    <text x="730" y="357" text-anchor="middle" class="title" font-size="38">${data.adherence}%</text>
+    <text x="730" y="387" text-anchor="middle" class="body" font-size="16">регулярность</text>
+    <rect x="56" y="514" width="788" height="370" rx="32" fill="#FFFFFF"/>
+    <text x="88" y="562" class="body" font-size="22">Регулярность по дням</text>
+    <text x="88" y="610" class="title" font-size="34">${data.taken} из ${data.total} приёмов</text>
+    ${chart}
+    <rect x="56" y="924" width="244" height="170" rx="26" fill="#FFFFFF"/><rect x="74" y="944" width="50" height="50" rx="15" fill="#E1F6EF"/><text x="99" y="979" text-anchor="middle" class="title" font-size="28" fill="#098565">✓</text><text x="178" y="1001" text-anchor="middle" class="title" font-size="40">${data.taken}</text><text x="178" y="1043" text-anchor="middle" class="body" font-size="19">Вовремя</text>
+    <rect x="328" y="924" width="244" height="170" rx="26" fill="#FFFFFF"/><rect x="346" y="944" width="50" height="50" rx="15" fill="#FFF3D9"/><text x="371" y="979" text-anchor="middle" class="title" font-size="28" fill="#BE7900">◷</text><text x="450" y="1001" text-anchor="middle" class="title" font-size="40">${data.waiting}</text><text x="450" y="1043" text-anchor="middle" class="body" font-size="19">Ожидают отметки</text>
+    <rect x="600" y="924" width="244" height="170" rx="26" fill="#FFFFFF"/><rect x="618" y="944" width="50" height="50" rx="15" fill="#FFE8E9"/><text x="643" y="979" text-anchor="middle" class="title" font-size="28" fill="#DF4C52">×</text><text x="722" y="1001" text-anchor="middle" class="title" font-size="40">${data.skipped}</text><text x="722" y="1043" text-anchor="middle" class="body" font-size="19">Пропущено</text>
+    <rect x="56" y="1134" width="788" height="86" rx="24" fill="#E4F2FF"/><text x="88" y="1188" class="title" font-size="24" fill="#194E80">Отчёт сформирован в «Умной аптечке»</text>
+  </svg>`;
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const element = new Image();
+    element.onload = () => resolve(element);
+    element.onerror = () => reject(new Error('Не удалось собрать изображение отчёта'));
+    element.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  });
+  const canvas = document.createElement('canvas');
+  canvas.width = width * 2;
+  canvas.height = height * 2;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Не удалось подготовить PDF');
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4', compress: true });
+  pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight(), 'lifecare-report', 'FAST');
+  return new File([pdf.output('blob')], `otchet-${data.period === 'week' ? 'nedelya' : 'mesyac'}.pdf`, { type: 'application/pdf' });
 }
 
 function Cabinet({ cabinetName, medications, packagesByMedication, onAdd, onAddPackage, onOpen, onOrder, onChooseCabinet }: { cabinetName: string; medications: Medication[]; packagesByMedication: Map<string, Package[]>; onAdd: () => void; onAddPackage: (medication: Medication) => void; onOpen: (medication: Medication) => void; onOrder: (medication: Medication) => void; onChooseCabinet: () => void }) {
