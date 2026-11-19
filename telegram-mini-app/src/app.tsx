@@ -424,7 +424,7 @@ function Reports({ doses, medicationById, period, onPeriodChange, onNotice }: { 
     const medicationTaken = medicationDoses.filter((dose) => dose.status === 'taken').length;
     const medicationSkipped = medicationDoses.filter((dose) => dose.status === 'skipped').length;
     const medicationWaiting = medicationDoses.filter((dose) => dose.status === 'pending').length;
-    return { name: medication?.name ?? 'Препарат', description: medication ? medicationDescription(medication) : '', total: medicationDoses.length, taken: medicationTaken, skipped: medicationSkipped, waiting: medicationWaiting, adherence: medicationDoses.length ? Math.round((medicationTaken / medicationDoses.length) * 100) : 0 };
+    return { name: medication?.name ?? 'Препарат', description: medication ? `${medication.form} ${medication.amount} ${medication.unit}`.trim() : '', total: medicationDoses.length, taken: medicationTaken, skipped: medicationSkipped, waiting: medicationWaiting, adherence: medicationDoses.length ? Math.round((medicationTaken / medicationDoses.length) * 100) : 0 };
   }).sort((left, right) => left.name.localeCompare(right.name, 'ru'));
   const share = async () => {
     try {
@@ -453,33 +453,33 @@ function escapeSvg(value: string) { return value.replace(/[&<>"']/g, (character)
 
 async function createReportPdf(data: ReportPdfData) {
   const { jsPDF } = await import('jspdf');
-  const width = 900;
-  const height = 1280;
-  const periodLabel = data.period === 'week' ? 'неделю' : 'месяц';
+  const width = 1190;
+  const height = 1684;
   const dateRange = `${data.start.toLocaleDateString('ru-RU')} — ${data.end.toLocaleDateString('ru-RU')}`;
+  const createdAt = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(today());
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4', compress: true });
   const rows = data.medications.length ? data.medications : [{ name: 'Нет приёмов за выбранный период', description: 'Добавьте приём, чтобы увидеть статистику', total: 0, taken: 0, skipped: 0, waiting: 0, adherence: 0 }];
-  const pages = Array.from({ length: Math.ceil(rows.length / 5) }, (_, index) => rows.slice(index * 5, (index + 1) * 5));
+  const pageSize = 13;
+  const pages = Array.from({ length: Math.ceil(rows.length / pageSize) }, (_, index) => rows.slice(index * pageSize, (index + 1) * pageSize));
   for (const [pageIndex, pageRows] of pages.entries()) {
     const isFirstPage = pageIndex === 0;
-    const tableTop = isFirstPage ? 540 : 230;
+    const tableTop = isFirstPage ? 490 : 300;
     const rowsSvg = pageRows.map((row, index) => {
-      const y = tableTop + 86 + index * 118;
-      const name = row.name.length > 27 ? `${row.name.slice(0, 26)}…` : row.name;
-      const description = row.description.length > 31 ? `${row.description.slice(0, 30)}…` : row.description;
-      return `<line x1="56" y1="${y + 68}" x2="844" y2="${y + 68}" stroke="#DCE1E8"/><text x="80" y="${y}" class="title" font-size="23">${escapeSvg(name)}</text><text x="80" y="${y + 29}" class="body" font-size="17">${escapeSvg(description)}</text><text x="440" y="${y + 12}" class="number" text-anchor="middle">${row.total}</text><text x="530" y="${y + 12}" class="green" text-anchor="middle">${row.taken}</text><text x="620" y="${y + 12}" class="red" text-anchor="middle">${row.skipped}</text><text x="710" y="${y + 12}" class="number" text-anchor="middle">${row.waiting}</text><text x="804" y="${y + 12}" class="number" text-anchor="middle">${row.adherence}%</text>`;
+      const y = tableTop + 70 + index * 72;
+      const name = row.name.length > 28 ? `${row.name.slice(0, 27)}…` : row.name;
+      const description = row.description.length > 34 ? `${row.description.slice(0, 33)}…` : row.description;
+      return `<line x1="78" y1="${y + 49}" x2="1112" y2="${y + 49}" stroke="#D9E1EA" stroke-width="1"/><text x="91" y="${y}" class="table-name">${escapeSvg(name)}</text><text x="91" y="${y + 25}" class="table-description">${escapeSvg(description)}</text><text x="347" y="${y + 5}" class="table-number" text-anchor="middle">${row.total}</text><text x="456" y="${y + 5}" class="table-number" text-anchor="middle">${row.total}</text><text x="608" y="${y + 5}" class="table-taken" text-anchor="middle">${row.taken}</text><text x="754" y="${y + 5}" class="table-skipped" text-anchor="middle">${row.skipped}</text><text x="983" y="${y + 5}" class="table-number" text-anchor="middle">${row.adherence}%</text>`;
     }).join('');
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-      <style>.title{font-family:Arial,sans-serif;fill:#111317;font-weight:700}.body{font-family:Arial,sans-serif;fill:#70747c}.number{font-family:Arial,sans-serif;fill:#1D2938;font-size:22px}.green{font-family:Arial,sans-serif;fill:#078563;font-size:22px}.red{font-family:Arial,sans-serif;fill:#D65A46;font-size:22px}.label{font-family:Arial,sans-serif;fill:#A2B6D1;font-size:16px;font-weight:700;letter-spacing:1px}.eyebrow{font-family:Arial,sans-serif;fill:#1677FF;font-size:20px;font-weight:700;letter-spacing:3px}</style>
-      <rect width="900" height="1280" fill="#F3F4F6"/>
-      <text x="64" y="82" class="eyebrow">УМНАЯ АПТЕЧКА</text>
-      <text x="64" y="145" class="title" font-size="50">Отчёт по препаратам</text>
-      <text x="64" y="184" class="body" font-size="23">Период: ${escapeSvg(dateRange)}</text>
-      ${isFirstPage ? `<rect x="56" y="230" width="788" height="210" rx="32" fill="#FFFFFF"/><text x="88" y="277" class="label">ОБЩАЯ СТАТИСТИКА</text><text x="92" y="354" class="eyebrow" font-size="42">${data.adherence}%</text><text x="92" y="391" class="body" font-size="18">регулярность</text><text x="288" y="354" class="title" font-size="42">${data.total}</text><text x="288" y="391" class="body" font-size="18">запланировано</text><text x="490" y="354" class="green" font-size="42">${data.taken}</text><text x="490" y="391" class="body" font-size="18">принято</text><text x="685" y="354" class="red" font-size="42">${data.skipped}</text><text x="685" y="391" class="body" font-size="18">пропущено</text>` : `<text x="64" y="184" class="body" font-size="20">Продолжение · препараты ${pageIndex * 5 + 1}–${pageIndex * 5 + pageRows.length}</text>`}
-      <text x="64" y="${tableTop - 32}" class="title" font-size="32">По препаратам</text>
-      <text x="80" y="${tableTop}" class="label">ПРЕПАРАТ</text><text x="440" y="${tableTop}" class="label" text-anchor="middle">ПЛАН</text><text x="530" y="${tableTop}" class="label" text-anchor="middle">ПРИНЯТО</text><text x="620" y="${tableTop}" class="label" text-anchor="middle">ПРОПУЩЕНО</text><text x="710" y="${tableTop}" class="label" text-anchor="middle">ОЖИДАЕТ</text><text x="804" y="${tableTop}" class="label" text-anchor="middle">РЕГ.</text><line x1="56" y1="${tableTop + 24}" x2="844" y2="${tableTop + 24}" stroke="#C9D6E7"/>
+      <style>.title{font-family:Arial,sans-serif;fill:#1C2734;font-weight:700}.body{font-family:Arial,sans-serif;fill:#6E7C8E}.metric{font-family:Arial,sans-serif;fill:#1777C8;font-size:42px;font-weight:700}.metric-label{font-family:Arial,sans-serif;fill:#6E7C8E;font-size:19px}.section-title{font-family:Arial,sans-serif;fill:#1C2734;font-size:29px;font-weight:700}.table-label{font-family:Arial,sans-serif;fill:#B9CCE5;font-size:17px;font-weight:700;letter-spacing:1px}.table-name{font-family:Arial,sans-serif;fill:#1C2734;font-size:22px;font-weight:700}.table-description{font-family:Arial,sans-serif;fill:#B6C9E1;font-size:20px}.table-number{font-family:Arial,sans-serif;fill:#1C2734;font-size:21px}.table-taken{font-family:Arial,sans-serif;fill:#008653;font-size:21px}.table-skipped{font-family:Arial,sans-serif;fill:#C95741;font-size:21px}.footer{font-family:Arial,sans-serif;fill:#B6C9E1;font-size:16px}</style>
+      <rect width="1190" height="1684" fill="#FFFFFF"/>
+      <text x="78" y="104" class="title" font-size="39">Отчёт по препаратам</text>
+      <text x="78" y="152" class="body" font-size="21">Период: ${escapeSvg(dateRange)} · сформировано ${escapeSvg(createdAt)}</text>
+      ${isFirstPage ? `<text x="99" y="259" class="metric">${data.adherence}%</text><text x="361" y="259" class="metric">${data.total}</text><text x="624" y="259" class="metric">${data.taken}</text><text x="888" y="259" class="metric">${data.waiting}</text><text x="99" y="298" class="metric-label">соблюдение</text><text x="99" y="323" class="metric-label">наступивших приёмов</text><text x="361" y="298" class="metric-label">приёмов по сроку</text><text x="624" y="298" class="metric-label">приёмов отмечено</text><text x="888" y="298" class="metric-label">ожидают отметки</text>` : `<text x="78" y="204" class="body" font-size="21">Продолжение · препараты ${pageIndex * pageSize + 1}–${pageIndex * pageSize + pageRows.length}</text>`}
+      <text x="78" y="${tableTop - 42}" class="section-title">По препаратам</text>
+      <text x="91" y="${tableTop}" class="table-label">ПРЕПАРАТ</text><text x="347" y="${tableTop}" class="table-label" text-anchor="middle">ПЛАН</text><text x="456" y="${tableTop}" class="table-label" text-anchor="middle">ПО СРОКУ</text><text x="608" y="${tableTop}" class="table-label" text-anchor="middle">ПРИНЯТО</text><text x="754" y="${tableTop}" class="table-label" text-anchor="middle">ПРОПУЩЕНО</text><text x="983" y="${tableTop}" class="table-label" text-anchor="middle">СОБЛЮДЕНИЕ</text><line x1="78" y1="${tableTop + 22}" x2="1112" y2="${tableTop + 22}" stroke="#C9D6E7" stroke-width="1.5"/>
       ${rowsSvg}
-      <rect x="56" y="1160" width="788" height="64" rx="20" fill="#E4F2FF"/><text x="88" y="1201" class="body" font-size="18">Сведения основаны на отметках в «Умной аптечке».</text>
+      <text x="78" y="1584" class="footer">Соблюдение считается по приёмам, время которых уже наступило. Отчёт отражает отметки пользователя и не является</text><text x="78" y="1606" class="footer">медицинской рекомендацией.</text>
     </svg>`;
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const element = new Image();
