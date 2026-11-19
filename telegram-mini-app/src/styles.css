@@ -455,12 +455,13 @@ input:not([type="checkbox"]), select, textarea { font-size: 16px !important; }
 
 /* Today screen — mobile reference from the approved Figma states. */
 .app-shell--doses { padding-top: 0; }
-.doses-screen--figma { display: block; min-height: calc(100dvh - 128px); margin: 0 -18px; padding: 42px 30px 128px; background: #f3f4f6; }
+.doses-screen--figma { position: relative; display: block; min-height: calc(100dvh - 128px); margin: 0 -18px; padding: 42px 30px 128px; background: #f3f4f6; }
 .doses-hero { display: flex; align-items: center; justify-content: space-between; }
 .doses-hero p { margin: 0; color: #1677ff; font-size: 12px; font-weight: 700; letter-spacing: 1.25px; }
 .doses-hero h1 { margin: 12px 0 7px; color: #111317; font-size: 40px; font-weight: 750; line-height: 42px; letter-spacing: -1.13px; }
 .doses-hero span { color: #70747c; font-size: 16px; line-height: 24px; }
-.doses-calendar-button { display: grid; place-items: center; width: 52px; height: 52px; margin-top: 15px; border: 1px solid rgba(17,19,23,.06); border-radius: 18px; color: #a2a6ad; background: rgba(255,255,255,.88); font-size: 25px; }
+.doses-calendar-button { display: grid; place-items: center; width: 64px; height: 64px; margin-top: 15px; border: 1px solid rgba(17,19,23,.06); border-radius: 22px; color: #a2a6ad; background: rgba(255,255,255,.88); box-shadow: 0 12px 24px rgba(42,53,70,.07); }
+.doses-calendar-button svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 .doses-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 42px; }
 .doses-week button { display: grid; justify-items: center; gap: 12px; padding: 0; color: #70747c; background: transparent; }
 .doses-week b { font-size: 12px; font-weight: 650; }
@@ -482,11 +483,11 @@ input:not([type="checkbox"]), select, textarea { font-size: 16px !important; }
 .dose-card--figma > button { display: grid; place-items: center; flex: 0 0 60px; width: 60px; height: 60px; border: 1px solid #bad8ff; border-radius: 50%; color: #1677ff; background: #e9f2ff; font-size: 27px; }
 .dose-card--done { opacity: .66; }
 .dose-card__status { color: #157d60; font-size: 12px; font-weight: 700; }
-.doses-empty--figma { display: grid; justify-items: center; max-width: 290px; margin: 100px auto 0; text-align: center; }
-.doses-empty--figma > span { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; color: #1677ff; background: #e2f2ff; font-size: 42px; }
-.doses-empty--figma h2 { margin: 26px 0 0; color: #111317; font-size: 25px; line-height: 1.15; letter-spacing: -.75px; }
-.doses-empty--figma p { margin: 12px 0 0; color: #8a929e; font-size: 15px; }
-.doses-empty__action { width: 100%; min-height: 52px; margin-top: 32px; border-radius: 17px; font-size: 15px; }
+.doses-empty--figma { display: grid; justify-items: center; max-width: 330px; margin: 88px auto 0; text-align: center; }
+.doses-empty--figma > span { display: grid; place-items: center; width: 108px; height: 108px; border-radius: 50%; color: #1677ff; background: #e5f1ff; box-shadow: 0 0 0 12px rgba(229,241,255,.38); font-size: 53px; font-weight: 400; }
+.doses-empty--figma h2 { margin: 40px 0 0; color: #111317; font-size: 27px; line-height: 1.18; letter-spacing: -.9px; }
+.doses-empty--figma p { margin: 14px 0 0; color: #7d8490; font-size: 17px; line-height: 1.42; }
+.doses-add-button { position: absolute; right: 30px; bottom: 119px; display: flex; align-items: center; justify-content: center; min-width: 246px; min-height: 72px; border-radius: 23px; box-shadow: 0 16px 30px rgba(22,119,255,.24); font-size: 18px; }
 
 /* Intake/reminder creation follows the same mobile bottom-sheet system as medication entry. */
 .reminder-sheet { display: flex; flex-direction: column; width: min(100%, 402px); min-height: min(620px, calc(100dvh - env(safe-area-inset-top))); max-height: calc(100dvh - env(safe-area-inset-top)); margin: 0 auto; overflow: hidden; border-radius: 28px 28px 0 0; background: #f8f8fa; box-shadow: 0 -12px 25px rgba(0,0,0,.12); }
@@ -553,6 +554,7 @@ input:not([type="checkbox"]), select, textarea { font-size: 16px !important; }
 .reminder-flow__footer .primary-button { width: 100%; min-height: 52px; border-radius: 17px; font-size: 15px; box-shadow: 0 10px 11px rgba(22,119,255,.2); }
 @media (max-width: 360px) {
   .doses-screen--figma { padding-right: 18px; padding-left: 18px; }
+  .doses-add-button { right: 18px; min-width: 218px; min-height: 62px; border-radius: 20px; font-size: 16px; }
   .doses-week { gap: 4px; }
   .doses-week span { font-size: 17px; }
   .dose-card--figma { padding: 17px; }
