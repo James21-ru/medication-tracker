@@ -69,5 +69,9 @@ textarea {
 }
 
 .tabbar {
-  padding-bottom: max(5px, calc(5px + var(--safe-bottom)));
+  /* The dock is already positioned above Telegram's safe area. Adding that
+   * inset to its internal padding makes it grow vertically on iPhone. */
+  height: 68px;
+  min-height: 68px;
+  padding: 5px;
 }

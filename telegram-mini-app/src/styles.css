@@ -455,7 +455,7 @@ input:not([type="checkbox"]), select, textarea { font-size: 16px !important; }
 
 /* Today screen — mobile reference from the approved Figma states. */
 .app-shell--doses { padding-top: 0; }
-.doses-screen--figma { position: relative; display: block; min-height: calc(100dvh - 128px); margin: 0 -18px; padding: 42px 30px 128px; background: #f3f4f6; }
+.doses-screen--figma { position: relative; display: block; min-height: calc(100dvh - 128px); margin: 0 -18px; padding: 42px 30px 224px; background: #f3f4f6; }
 .doses-hero { display: flex; align-items: center; justify-content: space-between; }
 .doses-hero p { margin: 0; color: #1677ff; font-size: 12px; font-weight: 700; letter-spacing: 1.25px; }
 .doses-hero h1 { margin: 12px 0 7px; color: #111317; font-size: 40px; font-weight: 750; line-height: 42px; letter-spacing: -1.13px; }
@@ -487,7 +487,7 @@ input:not([type="checkbox"]), select, textarea { font-size: 16px !important; }
 .doses-empty--figma > span { display: grid; place-items: center; width: 108px; height: 108px; border-radius: 50%; color: #1677ff; background: #e5f1ff; box-shadow: 0 0 0 12px rgba(229,241,255,.38); font-size: 53px; font-weight: 400; }
 .doses-empty--figma h2 { margin: 40px 0 0; color: #111317; font-size: 27px; line-height: 1.18; letter-spacing: -.9px; }
 .doses-empty--figma p { margin: 14px 0 0; color: #7d8490; font-size: 17px; line-height: 1.42; }
-.doses-add-button { position: fixed; z-index: 3; right: max(20px, calc(50% - 250px)); bottom: calc(94px + env(safe-area-inset-bottom)); display: flex; align-items: center; justify-content: center; min-width: 246px; min-height: 62px; border-radius: 21px; box-shadow: 0 16px 30px rgba(22,119,255,.24); font-size: 17px; }
+.doses-add-button { position: fixed; z-index: 3; right: max(20px, calc(50% - 250px)); bottom: calc(112px + env(safe-area-inset-bottom)); display: flex; align-items: center; justify-content: center; min-width: 246px; min-height: 62px; border-radius: 21px; box-shadow: 0 16px 30px rgba(22,119,255,.24); font-size: 17px; }
 
 /* Intake/reminder creation follows the same mobile bottom-sheet system as medication entry. */
 .reminder-sheet { display: flex; flex-direction: column; width: min(100%, 402px); min-height: min(620px, calc(100dvh - env(safe-area-inset-top))); max-height: calc(100dvh - env(safe-area-inset-top)); margin: 0 auto; overflow: hidden; border-radius: 28px 28px 0 0; background: #f8f8fa; box-shadow: 0 -12px 25px rgba(0,0,0,.12); }
