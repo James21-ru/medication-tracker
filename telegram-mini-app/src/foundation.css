@@ -1,0 +1,73 @@
+/*
+ * Interface foundation
+ *
+ * This file intentionally contains only cross-screen rules. Screen-specific
+ * layout stays in styles.css, so a change to a modal or the tab bar cannot
+ * accidentally stretch cards on a content screen.
+ */
+:root {
+  --app-height: var(--telegram-viewport-height, 100dvh);
+  --surface: #ffffff;
+  --canvas: #f3f4f6;
+  --ink: #111317;
+  --muted: #70747c;
+  --accent: #1677ff;
+  --radius-control: 18px;
+  --radius-sheet: 28px;
+  --content-width: 402px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html,
+body,
+#root {
+  min-height: var(--app-height);
+}
+
+body {
+  background: var(--canvas);
+  overscroll-behavior-y: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(22, 119, 255, .42);
+  outline-offset: 2px;
+}
+
+.app-shell {
+  min-height: var(--app-height);
+  background: var(--canvas);
+}
+
+/* Native text inputs must remain 16 px or larger on iOS: that prevents the
+ * browser from zooming the whole Mini App when the keyboard opens. */
+input:not([type="checkbox"]),
+select,
+textarea {
+  font-size: 16px !important;
+}
+
+/* One scroll owner per modal: the sheet body, never Telegram's host page. */
+.modal-backdrop {
+  height: var(--app-height);
+  min-height: var(--app-height);
+  overscroll-behavior: none;
+}
+
+.tabbar {
+  padding-bottom: max(5px, calc(5px + var(--safe-bottom)));
+}
