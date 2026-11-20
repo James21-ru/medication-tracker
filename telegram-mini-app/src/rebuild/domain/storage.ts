@@ -37,18 +37,26 @@ async function toIndexedDb(data: LifeCareData) {
 function isLifeCareData(value: unknown): value is LifeCareData {
   if (!value || typeof value !== 'object') return false;
   const data = value as Partial<LifeCareData>;
-  return data.version === 1 && Array.isArray(data.cabinets) && Array.isArray(data.medications) && Array.isArray(data.packages);
+  return data.version === 2 && Array.isArray(data.cabinets) && Array.isArray(data.medications) && Array.isArray(data.packages) && Array.isArray(data.schedules) && Array.isArray(data.doseRecords);
+}
+
+function migrate(value: unknown): LifeCareData | null {
+  if (isLifeCareData(value)) return value;
+  if (!value || typeof value !== 'object') return null;
+  const data = value as { version?: unknown; cabinets?: unknown; medications?: unknown; packages?: unknown };
+  if (data.version !== 1 || !Array.isArray(data.cabinets) || !Array.isArray(data.medications) || !Array.isArray(data.packages)) return null;
+  return { version: 2, cabinets: data.cabinets as LifeCareData['cabinets'], medications: data.medications as LifeCareData['medications'], packages: data.packages as LifeCareData['packages'], schedules: [], doseRecords: [] };
 }
 
 export async function loadData(): Promise<LifeCareData> {
   try {
     const saved = await fromIndexedDb();
-    return saved && isLifeCareData(saved) ? saved : emptyData();
+    return migrate(saved) ?? emptyData();
   } catch {
     try {
       const raw = localStorage.getItem(fallbackKey);
       const saved: unknown = raw ? JSON.parse(raw) : null;
-      return isLifeCareData(saved) ? saved : emptyData();
+      return migrate(saved) ?? emptyData();
     } catch { return emptyData(); }
   }
 }

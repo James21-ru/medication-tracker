@@ -23,11 +23,39 @@ export type MedicationPackage = {
   createdAt: string;
 };
 
+export type ScheduleTime = { id: string; time: string; quantity: number; unit: string };
+
+export type MedicationSchedule = {
+  id: string;
+  medicationId: string;
+  frequency: 'daily';
+  startOn: string;
+  times: ScheduleTime[];
+  active: boolean;
+  createdAt: string;
+};
+
+export type DoseStatus = 'pending' | 'taken' | 'skipped';
+
+export type DoseRecord = {
+  id: string;
+  slotId: string;
+  medicationId: string;
+  date: string;
+  time: string;
+  quantity: number;
+  unit: string;
+  status: Exclude<DoseStatus, 'pending'>;
+  completedAt: string;
+};
+
 export type LifeCareData = {
-  version: 1;
+  version: 2;
   cabinets: Cabinet[];
   medications: Medication[];
   packages: MedicationPackage[];
+  schedules: MedicationSchedule[];
+  doseRecords: DoseRecord[];
 };
 
 export type AddMedicationInput = {
@@ -41,6 +69,8 @@ export type AddMedicationInput = {
   expiresOn: string | null;
 };
 
-export const emptyData = (): LifeCareData => ({ version: 1, cabinets: [], medications: [], packages: [] });
+export type CreateDailyScheduleInput = { medicationId: string; startOn: string; time: string; quantity: number; unit: string };
+
+export const emptyData = (): LifeCareData => ({ version: 2, cabinets: [], medications: [], packages: [], schedules: [], doseRecords: [] });
 
 export const makeId = (prefix: string) => `${prefix}-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
