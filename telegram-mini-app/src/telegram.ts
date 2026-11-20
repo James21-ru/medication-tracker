@@ -2,11 +2,17 @@ export type TelegramWebApp = {
   initData: string;
   ready: () => void;
   expand: () => void;
+  requestFullscreen?: () => void;
+  isFullscreen?: boolean;
   disableVerticalSwipes?: () => void;
   isExpanded?: boolean;
   viewportHeight?: number;
   viewportStableHeight?: number;
-  onEvent?: (eventType: 'viewportChanged', handler: () => void) => void;
+  safeAreaInset?: { top?: number; bottom?: number; left?: number; right?: number };
+  contentSafeAreaInset?: { top?: number; bottom?: number; left?: number; right?: number };
+  setHeaderColor?: (color: string) => void;
+  setBackgroundColor?: (color: string) => void;
+  onEvent?: (eventType: 'viewportChanged' | 'fullscreenChanged' | 'safeAreaChanged' | 'contentSafeAreaChanged', handler: () => void) => void;
   openLink: (url: string) => void;
   colorScheme: 'light' | 'dark';
   themeParams: { bg_color?: string; text_color?: string };
@@ -26,25 +32,47 @@ export function prepareTelegramApp() {
   const app = telegramApp();
   if (!app) return null;
 
-  // Telegram opens iOS Mini Apps in the compact sheet by default.  Expand as
-  // early as possible, then repeat after the native sheet has measured itself.
+  // Use the native fullscreen API where the Telegram client supports it. Older
+  // clients retain the expanded Mini App behavior instead of failing to open.
   const expand = () => app.expand();
+  let fullscreenRequested = false;
+  const requestFullscreen = () => {
+    if (app.requestFullscreen && !app.isFullscreen && !fullscreenRequested) {
+      fullscreenRequested = true;
+      app.requestFullscreen();
+    }
+    else if (!app.isFullscreen) expand();
+  };
+  const syncInsets = () => {
+    const root = document.documentElement.style;
+    const contentInsets = app.contentSafeAreaInset ?? app.safeAreaInset;
+    root.setProperty('--telegram-safe-top', `${contentInsets?.top ?? 0}px`);
+    root.setProperty('--telegram-safe-bottom', `${contentInsets?.bottom ?? 0}px`);
+    root.setProperty('--telegram-safe-left', `${contentInsets?.left ?? 0}px`);
+    root.setProperty('--telegram-safe-right', `${contentInsets?.right ?? 0}px`);
+  };
   const syncViewportHeight = () => {
     const height = app.viewportStableHeight ?? app.viewportHeight;
     if (height && Number.isFinite(height)) document.documentElement.style.setProperty('--telegram-viewport-height', `${height}px`);
   };
   app.ready();
+  app.setHeaderColor?.('#f6f7f8');
+  app.setBackgroundColor?.('#f6f7f8');
   // A swipe inside a scrollable sheet must never be interpreted by Telegram as
   // a request to dismiss the whole Mini App.
   app.disableVerticalSwipes?.();
   document.documentElement.dataset.telegram = 'true';
   syncViewportHeight();
-  expand();
-  window.requestAnimationFrame(() => { syncViewportHeight(); expand(); });
-  window.setTimeout(() => { syncViewportHeight(); expand(); }, 120);
+  syncInsets();
+  requestFullscreen();
+  window.requestAnimationFrame(() => { syncViewportHeight(); syncInsets(); requestFullscreen(); });
+  window.setTimeout(() => { syncViewportHeight(); syncInsets(); requestFullscreen(); }, 120);
   app.onEvent?.('viewportChanged', () => {
     syncViewportHeight();
-    if (!app.isExpanded) expand();
+    if (!app.isFullscreen && !app.isExpanded) expand();
   });
+  app.onEvent?.('fullscreenChanged', () => { syncViewportHeight(); syncInsets(); });
+  app.onEvent?.('safeAreaChanged', syncInsets);
+  app.onEvent?.('contentSafeAreaChanged', syncInsets);
   return app;
 }
