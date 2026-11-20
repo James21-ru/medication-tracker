@@ -39,7 +39,7 @@ export function LifeCareProvider({ children }: { children: ReactNode }) {
       return { cabinet };
     },
     addMedication(input) {
-      const medication: Medication = { id: makeId('medication'), cabinetId: input.cabinetId, name: input.name.trim(), category: input.category, form: input.form, packageDose: input.packageDose, createdAt: new Date().toISOString() };
+      const medication: Medication = { id: makeId('medication'), cabinetId: input.cabinetId, name: input.name.trim(), category: input.category, form: input.form, packageDose: input.packageDose, barcode: input.barcode, createdAt: new Date().toISOString() };
       setData((current) => ({
         ...current,
         medications: [...current.medications, medication],

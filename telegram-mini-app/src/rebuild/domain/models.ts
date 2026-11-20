@@ -11,6 +11,7 @@ export type Medication = {
   category: string | null;
   form: string;
   packageDose: string | null;
+  barcode: string | null;
   createdAt: string;
 };
 
@@ -69,6 +70,7 @@ export type AddMedicationInput = {
   category: string | null;
   form: string;
   packageDose: string | null;
+  barcode: string | null;
   quantity: number;
   unit: string;
   expiresOn: string | null;

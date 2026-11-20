@@ -41,7 +41,7 @@ function isLifeCareData(value: unknown): value is LifeCareData {
 }
 
 function migrate(value: unknown): LifeCareData | null {
-  if (isLifeCareData(value)) return { ...value, schedules: value.schedules.map((schedule) => ({ ...schedule, endOn: schedule.endOn ?? null, weekdays: schedule.weekdays ?? [], intervalDays: schedule.intervalDays ?? null, activeDays: schedule.activeDays ?? null, restDays: schedule.restDays ?? null })) };
+  if (isLifeCareData(value)) return { ...value, medications: value.medications.map((medication) => ({ ...medication, barcode: medication.barcode ?? null })), schedules: value.schedules.map((schedule) => ({ ...schedule, endOn: schedule.endOn ?? null, weekdays: schedule.weekdays ?? [], intervalDays: schedule.intervalDays ?? null, activeDays: schedule.activeDays ?? null, restDays: schedule.restDays ?? null })) };
   if (!value || typeof value !== 'object') return null;
   const data = value as { version?: unknown; cabinets?: unknown; medications?: unknown; packages?: unknown };
   if (data.version !== 1 || !Array.isArray(data.cabinets) || !Array.isArray(data.medications) || !Array.isArray(data.packages)) return null;
