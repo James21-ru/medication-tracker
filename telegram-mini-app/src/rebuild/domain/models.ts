@@ -28,8 +28,13 @@ export type ScheduleTime = { id: string; time: string; quantity: number; unit: s
 export type MedicationSchedule = {
   id: string;
   medicationId: string;
-  frequency: 'daily';
+  frequency: 'daily' | 'weekdays' | 'interval' | 'cycle' | 'as-needed';
   startOn: string;
+  endOn: string | null;
+  weekdays: number[];
+  intervalDays: number | null;
+  activeDays: number | null;
+  restDays: number | null;
   times: ScheduleTime[];
   active: boolean;
   createdAt: string;
@@ -69,7 +74,19 @@ export type AddMedicationInput = {
   expiresOn: string | null;
 };
 
-export type CreateDailyScheduleInput = { medicationId: string; startOn: string; time: string; quantity: number; unit: string };
+export type CreateScheduleInput = {
+  medicationId: string;
+  frequency: MedicationSchedule['frequency'];
+  startOn: string;
+  endOn: string | null;
+  weekdays?: number[];
+  intervalDays?: number | null;
+  activeDays?: number | null;
+  restDays?: number | null;
+  time: string;
+  quantity: number;
+  unit: string;
+};
 
 export const emptyData = (): LifeCareData => ({ version: 2, cabinets: [], medications: [], packages: [], schedules: [], doseRecords: [] });
 

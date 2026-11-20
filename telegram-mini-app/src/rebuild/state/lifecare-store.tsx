@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { emptyData, makeId, type AddMedicationInput, type Cabinet, type CreateDailyScheduleInput, type DoseRecord, type DoseStatus, type LifeCareData, type Medication, type MedicationSchedule } from '../domain/models';
+import { emptyData, makeId, type AddMedicationInput, type Cabinet, type CreateScheduleInput, type DoseRecord, type DoseStatus, type LifeCareData, type Medication, type MedicationSchedule } from '../domain/models';
 import { loadData, saveData } from '../domain/storage';
 
 type Store = {
@@ -7,7 +7,7 @@ type Store = {
   isReady: boolean;
   createCabinet: (name: string) => { cabinet?: Cabinet; existing?: Cabinet; error?: string };
   addMedication: (input: AddMedicationInput) => Medication;
-  createDailySchedule: (input: CreateDailyScheduleInput) => MedicationSchedule;
+  createSchedule: (input: CreateScheduleInput) => MedicationSchedule;
   doseStatus: (slotId: string) => DoseStatus;
   setDoseStatus: (input: Omit<DoseRecord, 'id' | 'completedAt' | 'status'> & { status: Exclude<DoseStatus, 'pending'> }) => void;
 };
@@ -43,8 +43,8 @@ export function LifeCareProvider({ children }: { children: ReactNode }) {
       }));
       return medication;
     },
-    createDailySchedule(input) {
-      const schedule: MedicationSchedule = { id: makeId('schedule'), medicationId: input.medicationId, frequency: 'daily', startOn: input.startOn, active: true, createdAt: new Date().toISOString(), times: [{ id: makeId('time'), time: input.time, quantity: input.quantity, unit: input.unit }] };
+    createSchedule(input) {
+      const schedule: MedicationSchedule = { id: makeId('schedule'), medicationId: input.medicationId, frequency: input.frequency, startOn: input.startOn, endOn: input.endOn, weekdays: input.weekdays ?? [], intervalDays: input.intervalDays ?? null, activeDays: input.activeDays ?? null, restDays: input.restDays ?? null, active: true, createdAt: new Date().toISOString(), times: [{ id: makeId('time'), time: input.time, quantity: input.quantity, unit: input.unit }] };
       setData((current) => ({ ...current, schedules: [...current.schedules, schedule] }));
       return schedule;
     },
