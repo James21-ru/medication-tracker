@@ -59,7 +59,7 @@ export function LifeCareProvider({ children }: { children: ReactNode }) {
     resetData() { setData(emptyData()); },
     saveSchedule(input, scheduleId) {
       const currentSchedule = scheduleId ? data.schedules.find((item) => item.id === scheduleId) : undefined;
-      const schedule: MedicationSchedule = { id: currentSchedule?.id ?? makeId('schedule'), medicationId: input.medicationId, frequency: input.frequency, startOn: input.startOn, endOn: input.endOn, weekdays: input.weekdays ?? [], intervalDays: input.intervalDays ?? null, activeDays: input.activeDays ?? null, restDays: input.restDays ?? null, active: true, createdAt: currentSchedule?.createdAt ?? new Date().toISOString(), times: [{ id: currentSchedule?.times[0]?.id ?? makeId('time'), time: input.time, quantity: input.quantity, unit: input.unit }] };
+      const schedule: MedicationSchedule = { id: currentSchedule?.id ?? makeId('schedule'), medicationId: input.medicationId, frequency: input.frequency, startOn: input.startOn, endOn: input.endOn, weekdays: input.weekdays ?? [], intervalDays: input.intervalDays ?? null, activeDays: input.activeDays ?? null, restDays: input.restDays ?? null, active: true, createdAt: currentSchedule?.createdAt ?? new Date().toISOString(), times: input.times.map((time, index) => ({ id: currentSchedule?.times[index]?.id ?? makeId('time'), ...time })) };
       setData((current) => ({ ...current, schedules: current.schedules.filter((item) => item.id !== schedule.id).map((item) => item.medicationId === input.medicationId ? { ...item, active: false } : item).concat(schedule) }));
       return schedule;
     },

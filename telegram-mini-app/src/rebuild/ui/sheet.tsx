@@ -3,9 +3,14 @@ import { Icon } from './icons';
 
 export function Sheet({ title, onClose, children, footer }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
   useEffect(() => {
-    const previous = document.body.style.overflow;
+    const scrollY = window.scrollY;
+    const previous = { bodyOverflow: document.body.style.overflow, bodyPosition: document.body.style.position, bodyTop: document.body.style.top, bodyWidth: document.body.style.width, htmlOverflow: document.documentElement.style.overflow };
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previous; };
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+    document.documentElement.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous.bodyOverflow; document.body.style.position = previous.bodyPosition; document.body.style.top = previous.bodyTop; document.body.style.width = previous.bodyWidth; document.documentElement.style.overflow = previous.htmlOverflow; window.scrollTo(0, scrollY); };
   }, []);
   useEffect(() => {
     const viewport = window.visualViewport;

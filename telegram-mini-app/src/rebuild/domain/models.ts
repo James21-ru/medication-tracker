@@ -85,9 +85,7 @@ export type CreateScheduleInput = {
   intervalDays?: number | null;
   activeDays?: number | null;
   restDays?: number | null;
-  time: string;
-  quantity: number;
-  unit: string;
+  times: Array<Pick<ScheduleTime, 'time' | 'quantity' | 'unit'>>;
 };
 
 export const emptyData = (): LifeCareData => ({ version: 2, cabinets: [], medications: [], packages: [], schedules: [], doseRecords: [] });
