@@ -10,7 +10,7 @@ type Store = {
   addPackage: (input: Omit<MedicationPackage, 'id' | 'createdAt'>) => void;
   updateMedication: (medicationId: string, patch: Pick<Medication, 'name' | 'category' | 'form' | 'packageDose'>) => void;
   deleteMedication: (medicationId: string) => void;
-  createSchedule: (input: CreateScheduleInput) => MedicationSchedule;
+  saveSchedule: (input: CreateScheduleInput, scheduleId?: string) => MedicationSchedule;
   doseStatus: (slotId: string) => DoseStatus;
   setDoseStatus: (input: Omit<DoseRecord, 'id' | 'completedAt' | 'status'> & { status: Exclude<DoseStatus, 'pending'> }) => { ok: boolean; error?: string };
 };
@@ -55,9 +55,10 @@ export function LifeCareProvider({ children }: { children: ReactNode }) {
     deleteMedication(medicationId) {
       setData((current) => ({ ...current, medications: current.medications.filter((item) => item.id !== medicationId), packages: current.packages.filter((item) => item.medicationId !== medicationId), schedules: current.schedules.filter((item) => item.medicationId !== medicationId), doseRecords: current.doseRecords.filter((item) => item.medicationId !== medicationId) }));
     },
-    createSchedule(input) {
-      const schedule: MedicationSchedule = { id: makeId('schedule'), medicationId: input.medicationId, frequency: input.frequency, startOn: input.startOn, endOn: input.endOn, weekdays: input.weekdays ?? [], intervalDays: input.intervalDays ?? null, activeDays: input.activeDays ?? null, restDays: input.restDays ?? null, active: true, createdAt: new Date().toISOString(), times: [{ id: makeId('time'), time: input.time, quantity: input.quantity, unit: input.unit }] };
-      setData((current) => ({ ...current, schedules: [...current.schedules, schedule] }));
+    saveSchedule(input, scheduleId) {
+      const currentSchedule = scheduleId ? data.schedules.find((item) => item.id === scheduleId) : undefined;
+      const schedule: MedicationSchedule = { id: currentSchedule?.id ?? makeId('schedule'), medicationId: input.medicationId, frequency: input.frequency, startOn: input.startOn, endOn: input.endOn, weekdays: input.weekdays ?? [], intervalDays: input.intervalDays ?? null, activeDays: input.activeDays ?? null, restDays: input.restDays ?? null, active: true, createdAt: currentSchedule?.createdAt ?? new Date().toISOString(), times: [{ id: currentSchedule?.times[0]?.id ?? makeId('time'), time: input.time, quantity: input.quantity, unit: input.unit }] };
+      setData((current) => ({ ...current, schedules: current.schedules.filter((item) => item.id !== schedule.id).map((item) => item.medicationId === input.medicationId ? { ...item, active: false } : item).concat(schedule) }));
       return schedule;
     },
     doseStatus(slotId) {
