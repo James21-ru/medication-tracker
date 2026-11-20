@@ -1,6 +1,6 @@
 import type { SVGProps } from 'react';
 
-type IconName = 'case' | 'calendar' | 'chart' | 'person' | 'plus' | 'chevron' | 'close' | 'check' | 'pill';
+type IconName = 'case' | 'calendar' | 'chart' | 'person' | 'plus' | 'chevron' | 'close' | 'check' | 'pill' | 'barcode';
 
 export function Icon({ name, ...props }: { name: IconName } & SVGProps<SVGSVGElement>) {
   const common = { fill: 'none', stroke: 'currentColor', strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, strokeWidth: 1.8 };
@@ -14,5 +14,6 @@ export function Icon({ name, ...props }: { name: IconName } & SVGProps<SVGSVGEle
     {name === 'close' ? <path d="m6 6 12 12M18 6 6 18"/> : null}
     {name === 'check' ? <path d="m5 12.5 4.3 4.3L19 7"/> : null}
     {name === 'pill' ? <><path d="m7.2 16.8-1.5-1.5a4 4 0 0 1 0-5.6l4-4a4 4 0 0 1 5.6 0l1.5 1.5a4 4 0 0 1 0 5.6l-4 4a4 4 0 0 1-5.6 0Z"/><path d="m8.5 8.5 7 7"/></> : null}
+    {name === 'barcode' ? <><path d="M4 5v14M7 5v14M10 5v14M14 5v14M17 5v14M20 5v14"/><path d="M12 5v14" strokeWidth="3"/></> : null}
   </svg>;
 }
