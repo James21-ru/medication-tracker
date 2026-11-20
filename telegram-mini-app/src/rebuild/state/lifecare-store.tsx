@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { emptyData, makeId, type AddMedicationInput, type Cabinet, type CreateScheduleInput, type DoseRecord, type DoseStatus, type LifeCareData, type Medication, type MedicationSchedule } from '../domain/models';
+import { emptyData, makeId, type AddMedicationInput, type Cabinet, type CreateScheduleInput, type DoseRecord, type DoseStatus, type LifeCareData, type Medication, type MedicationPackage, type MedicationSchedule } from '../domain/models';
 import { loadData, saveData } from '../domain/storage';
 
 type Store = {
@@ -7,9 +7,10 @@ type Store = {
   isReady: boolean;
   createCabinet: (name: string) => { cabinet?: Cabinet; existing?: Cabinet; error?: string };
   addMedication: (input: AddMedicationInput) => Medication;
+  addPackage: (input: Omit<MedicationPackage, 'id' | 'createdAt'>) => void;
   createSchedule: (input: CreateScheduleInput) => MedicationSchedule;
   doseStatus: (slotId: string) => DoseStatus;
-  setDoseStatus: (input: Omit<DoseRecord, 'id' | 'completedAt' | 'status'> & { status: Exclude<DoseStatus, 'pending'> }) => void;
+  setDoseStatus: (input: Omit<DoseRecord, 'id' | 'completedAt' | 'status'> & { status: Exclude<DoseStatus, 'pending'> }) => { ok: boolean; error?: string };
 };
 
 const LifeCareContext = createContext<Store | null>(null);
@@ -43,6 +44,9 @@ export function LifeCareProvider({ children }: { children: ReactNode }) {
       }));
       return medication;
     },
+    addPackage(input) {
+      setData((current) => ({ ...current, packages: [...current.packages, { ...input, id: makeId('package'), createdAt: new Date().toISOString() }] }));
+    },
     createSchedule(input) {
       const schedule: MedicationSchedule = { id: makeId('schedule'), medicationId: input.medicationId, frequency: input.frequency, startOn: input.startOn, endOn: input.endOn, weekdays: input.weekdays ?? [], intervalDays: input.intervalDays ?? null, activeDays: input.activeDays ?? null, restDays: input.restDays ?? null, active: true, createdAt: new Date().toISOString(), times: [{ id: makeId('time'), time: input.time, quantity: input.quantity, unit: input.unit }] };
       setData((current) => ({ ...current, schedules: [...current.schedules, schedule] }));
@@ -53,15 +57,19 @@ export function LifeCareProvider({ children }: { children: ReactNode }) {
       return record?.status ?? 'pending';
     },
     setDoseStatus(input) {
+      const today = new Intl.DateTimeFormat('en-CA').format(new Date());
+      const available = data.packages.filter((pack) => pack.medicationId === input.medicationId && pack.unit === input.unit && pack.quantity > 0 && (!pack.expiresOn || pack.expiresOn >= today)).reduce((total, pack) => total + pack.quantity, 0);
+      if (input.status === 'taken' && available < input.quantity) return { ok: false, error: `Недостаточно пригодного запаса: доступно ${available} ${input.unit}.` };
       setData((current) => {
         const existing = current.doseRecords.find((item) => item.slotId === input.slotId);
         const records = existing ? current.doseRecords.map((item) => item.slotId === input.slotId ? { ...item, status: input.status, completedAt: new Date().toISOString() } : item) : [...current.doseRecords, { ...input, id: makeId('dose'), completedAt: new Date().toISOString() }];
         if (input.status !== 'taken' || existing?.status === 'taken') return { ...current, doseRecords: records };
         let remaining = input.quantity;
         const packages = current.packages.map((pack) => ({ ...pack }));
-        packages.filter((pack) => pack.medicationId === input.medicationId && pack.unit === input.unit && pack.quantity > 0).sort((left, right) => (left.expiresOn ?? '9999-12-31').localeCompare(right.expiresOn ?? '9999-12-31')).forEach((pack) => { const used = Math.min(remaining, pack.quantity); pack.quantity -= used; remaining -= used; });
+        packages.filter((pack) => pack.medicationId === input.medicationId && pack.unit === input.unit && pack.quantity > 0 && (!pack.expiresOn || pack.expiresOn >= today)).sort((left, right) => (left.expiresOn ?? '9999-12-31').localeCompare(right.expiresOn ?? '9999-12-31')).forEach((pack) => { const used = Math.min(remaining, pack.quantity); pack.quantity -= used; remaining -= used; });
         return { ...current, packages, doseRecords: records };
       });
+      return { ok: true };
     },
   }), [data, isReady]);
 
