@@ -2,7 +2,7 @@ import type { LifeCareData } from './domain/models';
 
 export type ReportStats = { planned: number; taken: number; skipped: number; overdue: number; adherence: number; dailyTaken: number[] };
 
-const periodTitle = (period: 'week' | 'month') => period === 'week' ? 'за последние 7 дней' : 'за последние 30 дней';
+const periodTitle = (period: 'today' | 'week' | 'month') => period === 'today' ? 'за сегодня' : period === 'week' ? 'за последние 7 дней' : 'за последние 30 дней';
 const text = (context: CanvasRenderingContext2D, value: string, x: number, y: number, maxWidth: number, lineHeight: number) => {
   const words = value.split(' ');
   let line = '';
@@ -23,7 +23,7 @@ const roundRect = (context: CanvasRenderingContext2D, x: number, y: number, widt
   context.fill();
 };
 
-export async function downloadMedicationReport(data: LifeCareData, period: 'week' | 'month', dates: string[], stats: ReportStats) {
+export async function downloadMedicationReport(data: LifeCareData, period: 'today' | 'week' | 'month', dates: string[], stats: ReportStats) {
   const { jsPDF } = await import('jspdf');
   const canvas = document.createElement('canvas');
   canvas.width = 1240;
