@@ -4,6 +4,7 @@ import { LifeCareProvider, useLifeCare } from './state/lifecare-store';
 import { AddMedicationFlow } from './add-medication-flow';
 import { AddPackageSheet } from './add-package-sheet';
 import { DosesScreen } from './doses-screen';
+import { ReportsScreen } from './reports-screen';
 import { ScheduleFlow } from './schedule-flow';
 import { EmptyState } from './ui/empty-state';
 import { Icon } from './ui/icons';
@@ -19,7 +20,7 @@ function LifeCareShell() {
   const { isReady } = useLifeCare();
   const [tab, setTab] = useState<Tab>('cabinet');
   if (!isReady) return <main className="lc-loading" aria-busy="true"><span /><p>Загружаем аптечку</p></main>;
-  return <main className="lc-app-shell"><header className="lc-app-header"><div><span className="lc-app-header__brand">LifeCare</span><p>{tab === 'cabinet' ? 'Ваша аптечка' : tab === 'doses' ? 'План приёмов' : tab === 'reports' ? 'Динамика приёмов' : 'Профиль'}</p></div><button className="lc-avatar" aria-label="Открыть аккаунт" onClick={() => setTab('account')}><Icon name="person" /></button></header><div className="lc-app-content">{tab === 'cabinet' ? <CabinetScreen /> : tab === 'doses' ? <DosesScreen /> : <ComingSoon tab={tab} />}</div><nav className="lc-tabbar" aria-label="Основная навигация">{([{ key: 'cabinet', label: 'Аптечка', icon: 'case' }, { key: 'doses', label: 'Приёмы', icon: 'calendar' }, { key: 'reports', label: 'Отчёты', icon: 'chart' }, { key: 'account', label: 'Аккаунт', icon: 'person' }] as const).map((item) => <button key={item.key} aria-current={tab === item.key ? 'page' : undefined} className={tab === item.key ? 'is-active' : ''} onClick={() => setTab(item.key)}><Icon name={item.icon} /><span>{item.label}</span></button>)}</nav></main>;
+  return <main className="lc-app-shell"><header className="lc-app-header"><div><span className="lc-app-header__brand">LifeCare</span><p>{tab === 'cabinet' ? 'Ваша аптечка' : tab === 'doses' ? 'План приёмов' : tab === 'reports' ? 'Динамика приёмов' : 'Профиль'}</p></div><button className="lc-avatar" aria-label="Открыть аккаунт" onClick={() => setTab('account')}><Icon name="person" /></button></header><div className="lc-app-content">{tab === 'cabinet' ? <CabinetScreen /> : tab === 'doses' ? <DosesScreen /> : tab === 'reports' ? <ReportsScreen /> : <ComingSoon tab="account" />}</div><nav className="lc-tabbar" aria-label="Основная навигация">{([{ key: 'cabinet', label: 'Аптечка', icon: 'case' }, { key: 'doses', label: 'Приёмы', icon: 'calendar' }, { key: 'reports', label: 'Отчёты', icon: 'chart' }, { key: 'account', label: 'Аккаунт', icon: 'person' }] as const).map((item) => <button key={item.key} aria-current={tab === item.key ? 'page' : undefined} className={tab === item.key ? 'is-active' : ''} onClick={() => setTab(item.key)}><Icon name={item.icon} /><span>{item.label}</span></button>)}</nav></main>;
 }
 
 function CabinetScreen() {
