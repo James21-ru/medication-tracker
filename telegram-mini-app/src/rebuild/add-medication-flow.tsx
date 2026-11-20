@@ -18,7 +18,7 @@ export function AddMedicationFlow({ cabinet, onClose }: { cabinet: Cabinet; onCl
   const lastStep = 4;
   const next = () => {
     if (step === 0 && !draft.name.trim()) { setError('Введите название препарата.'); return; }
-    if (step === 4 && (!Number.isFinite(Number(draft.quantity)) || Number(draft.quantity) < 0)) { setError('Укажите количество: ноль или положительное число.'); return; }
+    if (step === 4 && (!draft.quantity.trim() || !Number.isFinite(Number(draft.quantity)) || Number(draft.quantity) < 0)) { setError('Укажите количество: ноль или положительное число.'); return; }
     if (step < lastStep) { setStep((current) => current + 1); return; }
     addMedication({ cabinetId: cabinet.id, name: draft.name, category: draft.category === 'Без категории' ? null : draft.category, form: draft.form === 'Другая форма' ? 'Другая форма' : draft.form, packageDose: draft.packageDose.trim() || null, quantity: Number(draft.quantity), unit: draft.unit, expiresOn: draft.expiresOn || null });
     setStep(5);
