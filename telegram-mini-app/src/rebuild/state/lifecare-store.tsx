@@ -8,6 +8,8 @@ type Store = {
   createCabinet: (name: string) => { cabinet?: Cabinet; existing?: Cabinet; error?: string };
   addMedication: (input: AddMedicationInput) => Medication;
   addPackage: (input: Omit<MedicationPackage, 'id' | 'createdAt'>) => void;
+  updateMedication: (medicationId: string, patch: Pick<Medication, 'name' | 'category' | 'form' | 'packageDose'>) => void;
+  deleteMedication: (medicationId: string) => void;
   createSchedule: (input: CreateScheduleInput) => MedicationSchedule;
   doseStatus: (slotId: string) => DoseStatus;
   setDoseStatus: (input: Omit<DoseRecord, 'id' | 'completedAt' | 'status'> & { status: Exclude<DoseStatus, 'pending'> }) => { ok: boolean; error?: string };
@@ -46,6 +48,12 @@ export function LifeCareProvider({ children }: { children: ReactNode }) {
     },
     addPackage(input) {
       setData((current) => ({ ...current, packages: [...current.packages, { ...input, id: makeId('package'), createdAt: new Date().toISOString() }] }));
+    },
+    updateMedication(medicationId, patch) {
+      setData((current) => ({ ...current, medications: current.medications.map((item) => item.id === medicationId ? { ...item, ...patch, name: patch.name.trim() } : item) }));
+    },
+    deleteMedication(medicationId) {
+      setData((current) => ({ ...current, medications: current.medications.filter((item) => item.id !== medicationId), packages: current.packages.filter((item) => item.medicationId !== medicationId), schedules: current.schedules.filter((item) => item.medicationId !== medicationId), doseRecords: current.doseRecords.filter((item) => item.medicationId !== medicationId) }));
     },
     createSchedule(input) {
       const schedule: MedicationSchedule = { id: makeId('schedule'), medicationId: input.medicationId, frequency: input.frequency, startOn: input.startOn, endOn: input.endOn, weekdays: input.weekdays ?? [], intervalDays: input.intervalDays ?? null, activeDays: input.activeDays ?? null, restDays: input.restDays ?? null, active: true, createdAt: new Date().toISOString(), times: [{ id: makeId('time'), time: input.time, quantity: input.quantity, unit: input.unit }] };
