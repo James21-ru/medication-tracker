@@ -1,5 +1,7 @@
 :root { --lc-bg: #f6f7f8; --lc-surface: #fff; --lc-ink: #15181d; --lc-muted: #737985; --lc-line: #e7e9ed; --lc-blue: #1479ed; --lc-blue-soft: #eaf4ff; --lc-shadow: 0 12px 32px rgba(34, 44, 60, .08); --lc-bottom: max(14px, env(safe-area-inset-bottom, 0px), var(--telegram-safe-bottom, 0px)); }
 * { box-sizing: border-box; }
+html[data-telegram='true'] .lc-sheet-backdrop { padding-top: max(96px, env(safe-area-inset-top, 0px), var(--telegram-safe-top, 0px)) !important; }
+html[data-telegram='true'] .lc-sheet { height: calc(100% - max(96px, env(safe-area-inset-top, 0px), var(--telegram-safe-top, 0px))) !important; max-height: calc(100% - max(96px, env(safe-area-inset-top, 0px), var(--telegram-safe-top, 0px))) !important; }
 .lc-cabinet-switcher + .lc-search { margin-top: 14px; }
 html[data-telegram='true'] .lc-app-shell { padding-top: max(96px, env(safe-area-inset-top, 0px), var(--telegram-safe-top, 0px)) !important; }
 .lc-app-content { min-height: calc(var(--telegram-viewport-height, 100dvh) - 100px) !important; }
