@@ -41,8 +41,7 @@ export function DosesScreen() {
   const selectNewMedicationCabinet = (cabinet: Cabinet) => { setCabinetPickerOpen(false); setCabinetForMedication(cabinet); };
   const openNewMedication = () => {
     setSelectMedicationOpen(false);
-    if (data.cabinets.length === 1) selectNewMedicationCabinet(data.cabinets[0]);
-    else setCabinetPickerOpen(true);
+    setCabinetPickerOpen(true);
   };
   const setStatus = (dose: PlannedDose, status: 'taken' | 'skipped') => {
     const result = setDoseStatus({ slotId: dose.slotId, medicationId: dose.medication.id, date: dose.date, time: dose.time, quantity: dose.quantity, unit: dose.unit, status });
