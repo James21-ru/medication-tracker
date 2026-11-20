@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Cabinet } from './domain/models';
+import type { Cabinet, Medication } from './domain/models';
 import { BarcodeScanner } from './barcode-scanner';
 import { expiryDateToIso, formatExpiryDate } from './date-input';
 import { useLifeCare } from './state/lifecare-store';
@@ -11,7 +11,7 @@ const forms = ['Таблетка', 'Капсула', 'Раствор', 'Капл
 type Draft = { name: string; category: string; form: string; packageDose: string; quantity: string; unit: string; expiresOn: string; barcode: string };
 const initialDraft: Draft = { name: '', category: 'Без категории', form: 'Таблетка', packageDose: '', quantity: '', unit: 'шт.', expiresOn: '', barcode: '' };
 
-export function AddMedicationFlow({ cabinet, onClose }: { cabinet: Cabinet; onClose: () => void }) {
+export function AddMedicationFlow({ cabinet, onClose, onAdded }: { cabinet: Cabinet; onClose: () => void; onAdded?: (medication: Medication) => void }) {
   const { addMedication } = useLifeCare();
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<Draft>(initialDraft);
@@ -24,7 +24,8 @@ export function AddMedicationFlow({ cabinet, onClose }: { cabinet: Cabinet; onCl
     if (step === 4 && (!draft.quantity.trim() || !Number.isFinite(Number(draft.quantity)) || Number(draft.quantity) < 0)) { setError('Укажите количество: ноль или положительное число.'); return; }
     if (step === 4 && draft.expiresOn && !expiryDateToIso(draft.expiresOn)) { setError('Введите существующую дату в формате ДД.ММ.ГГ или ДД.ММ.ГГГГ.'); return; }
     if (step < lastStep) { setStep((current) => current + 1); return; }
-    addMedication({ cabinetId: cabinet.id, name: draft.name, category: draft.category === 'Без категории' ? null : draft.category, form: draft.form === 'Другая форма' ? 'Другая форма' : draft.form, packageDose: draft.packageDose.trim() || null, barcode: draft.barcode || null, quantity: Number(draft.quantity), unit: draft.unit, expiresOn: draft.expiresOn ? expiryDateToIso(draft.expiresOn) : null });
+    const medication = addMedication({ cabinetId: cabinet.id, name: draft.name, category: draft.category === 'Без категории' ? null : draft.category, form: draft.form === 'Другая форма' ? 'Другая форма' : draft.form, packageDose: draft.packageDose.trim() || null, barcode: draft.barcode || null, quantity: Number(draft.quantity), unit: draft.unit, expiresOn: draft.expiresOn ? expiryDateToIso(draft.expiresOn) : null });
+    if (onAdded) { onAdded(medication); return; }
     setStep(5);
   };
   const title = step === 5 ? 'Препарат добавлен' : 'Новый препарат';
