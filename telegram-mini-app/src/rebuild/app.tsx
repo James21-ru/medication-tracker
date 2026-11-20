@@ -7,6 +7,7 @@ import { EditMedicationSheet } from './edit-medication-sheet';
 import { ManualDoseSheet } from './manual-dose-sheet';
 import { DosesScreen } from './doses-screen';
 import { ReportsScreen } from './reports-screen';
+import { AccountScreen } from './account-screen';
 import { ScheduleFlow } from './schedule-flow';
 import { EmptyState } from './ui/empty-state';
 import { Icon } from './ui/icons';
@@ -22,7 +23,7 @@ function LifeCareShell() {
   const { isReady } = useLifeCare();
   const [tab, setTab] = useState<Tab>('cabinet');
   if (!isReady) return <main className="lc-loading" aria-busy="true"><span /><p>Загружаем аптечку</p></main>;
-  return <main className="lc-app-shell"><header className="lc-app-header"><div><span className="lc-app-header__brand">LifeCare</span><p>{tab === 'cabinet' ? 'Ваша аптечка' : tab === 'doses' ? 'План приёмов' : tab === 'reports' ? 'Динамика приёмов' : 'Профиль'}</p></div><button className="lc-avatar" aria-label="Открыть аккаунт" onClick={() => setTab('account')}><Icon name="person" /></button></header><div className="lc-app-content">{tab === 'cabinet' ? <CabinetScreen /> : tab === 'doses' ? <DosesScreen /> : tab === 'reports' ? <ReportsScreen /> : <ComingSoon tab="account" />}</div><nav className="lc-tabbar" aria-label="Основная навигация">{([{ key: 'cabinet', label: 'Аптечка', icon: 'case' }, { key: 'doses', label: 'Приёмы', icon: 'calendar' }, { key: 'reports', label: 'Отчёты', icon: 'chart' }, { key: 'account', label: 'Аккаунт', icon: 'person' }] as const).map((item) => <button key={item.key} aria-current={tab === item.key ? 'page' : undefined} className={tab === item.key ? 'is-active' : ''} onClick={() => setTab(item.key)}><Icon name={item.icon} /><span>{item.label}</span></button>)}</nav></main>;
+  return <main className="lc-app-shell"><header className="lc-app-header"><div><span className="lc-app-header__brand">LifeCare</span><p>{tab === 'cabinet' ? 'Ваша аптечка' : tab === 'doses' ? 'План приёмов' : tab === 'reports' ? 'Динамика приёмов' : 'Профиль'}</p></div><button className="lc-avatar" aria-label="Открыть аккаунт" onClick={() => setTab('account')}><Icon name="person" /></button></header><div className="lc-app-content">{tab === 'cabinet' ? <CabinetScreen /> : tab === 'doses' ? <DosesScreen /> : tab === 'reports' ? <ReportsScreen /> : <AccountScreen />}</div><nav className="lc-tabbar" aria-label="Основная навигация">{([{ key: 'cabinet', label: 'Аптечка', icon: 'case' }, { key: 'doses', label: 'Приёмы', icon: 'calendar' }, { key: 'reports', label: 'Отчёты', icon: 'chart' }, { key: 'account', label: 'Аккаунт', icon: 'person' }] as const).map((item) => <button key={item.key} aria-current={tab === item.key ? 'page' : undefined} className={tab === item.key ? 'is-active' : ''} onClick={() => setTab(item.key)}><Icon name={item.icon} /><span>{item.label}</span></button>)}</nav></main>;
 }
 
 function CabinetScreen() {
@@ -81,10 +82,4 @@ function CreateCabinet({ onClose, onCreated }: { onClose: () => void; onCreated:
 function CabinetChooser({ current, onClose, onSelect, onCreate }: { current: Cabinet; onClose: () => void; onSelect: (cabinet: Cabinet) => void; onCreate: () => void }) {
   const { data } = useLifeCare();
   return <Sheet title="Выберите аптечку" onClose={onClose} footer={<button className="lc-secondary-button" onClick={onCreate}><Icon name="plus" />Создать аптечку</button>}><div className="lc-cabinet-choices">{data.cabinets.map((cabinet) => <button key={cabinet.id} className={cabinet.id === current.id ? 'is-selected' : ''} onClick={() => onSelect(cabinet)}><span><strong>{cabinet.name}</strong><small>{data.medications.filter((item) => item.cabinetId === cabinet.id).length} препаратов</small></span>{cabinet.id === current.id ? <Icon name="check" /> : <span className="lc-radio" />}</button>)}</div></Sheet>;
-}
-
-function ComingSoon({ tab }: { tab: Exclude<Tab, 'cabinet'> }) {
-  const content = { doses: ['calendar', 'Приёмы', 'Здесь появится ваш план приёмов.'], reports: ['chart', 'Отчёты', 'Здесь будет статистика по приёмам.'], account: ['person', 'Аккаунт', 'Здесь будут настройки профиля и уведомлений.'] } as const;
-  const [icon, title, description] = content[tab];
-  return <EmptyState icon={icon} title={title} description={description} />;
 }
