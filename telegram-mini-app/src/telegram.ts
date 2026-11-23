@@ -39,7 +39,8 @@ export function prepareTelegramApp() {
   const requestFullscreen = () => {
     if (app.requestFullscreen && !app.isFullscreen && !fullscreenRequested) {
       fullscreenRequested = true;
-      app.requestFullscreen();
+      try { app.requestFullscreen(); }
+      catch { expand(); }
     }
     else if (!app.isFullscreen) expand();
   };
