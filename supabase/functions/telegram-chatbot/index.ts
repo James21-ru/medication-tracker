@@ -22,7 +22,7 @@ type DueDose = {
   form: string;
   amount: string;
 };
-type MiniState = { version: 2; medications: Array<{ id: string; name: string; form: string; packageDose?: string | null }>; packages: Array<{ medicationId: string; quantity: number; unit: string; expiresOn: string | null }>; schedules: Array<{ id: string; medicationId: string; frequency: string; startOn: string; endOn: string | null; weekdays: number[]; intervalDays: number | null; activeDays: number | null; restDays: number | null; active: boolean; times: Array<{ id: string; time: string; quantity: number; unit: string }> }>; doseRecords: Array<{ slotId: string; status: 'taken' | 'skipped'; medicationId: string; date: string; time: string; quantity: number; unit: string; completedAt: string }> };
+type MiniState = { version: 2; cabinets: Array<{ id: string; name: string }>; medications: Array<{ id: string; cabinetId: string; name: string; form: string; packageDose?: string | null }>; packages: Array<{ medicationId: string; quantity: number; unit: string; expiresOn: string | null }>; schedules: Array<{ id: string; medicationId: string; frequency: string; startOn: string; endOn: string | null; weekdays: number[]; intervalDays: number | null; activeDays: number | null; restDays: number | null; active: boolean; times: Array<{ id: string; time: string; quantity: number; unit: string }> }>; doseRecords: Array<{ slotId: string; status: 'taken' | 'skipped'; medicationId: string; date: string; time: string; quantity: number; unit: string; completedAt: string }> };
 type SubscriptionState = { telegram_user_id: number; chat_id: number; time_zone: string; payload: MiniState };
 
 function requiredEnv(name: string) {
@@ -60,11 +60,49 @@ const appButton = () => {
   return url ? { inline_keyboard: [[{ text: 'Открыть приложение', web_app: { url } }]] } : undefined;
 };
 
+const botMenu = () => ({ inline_keyboard: [[{ text: 'Мои аптечки', callback_data: 'cabinets' }], ...(appButton()?.inline_keyboard ?? [])] });
+
+function currentStock(state: MiniState, medicationId: string) {
+  const today = dateInZone('UTC');
+  const packs = state.packages.filter((item) => item.medicationId === medicationId && item.quantity > 0 && (!item.expiresOn || item.expiresOn >= today));
+  const totals = new Map<string, number>();
+  for (const pack of packs) totals.set(pack.unit, (totals.get(pack.unit) ?? 0) + Number(pack.quantity));
+  return [...totals].map(([unit, quantity]) => `${quantity} ${unit}`).join(', ') || 'нет запаса';
+}
+
+async function loadMiniState(sql: ReturnType<typeof postgres>, telegramUserId: number) {
+  const states = await sql<{ payload: MiniState }[]>`select payload from mobile_auth.telegram_mini_app_states where telegram_user_id = ${telegramUserId}`;
+  return states[0]?.payload ?? null;
+}
+
+async function sendCabinets(sql: ReturnType<typeof postgres>, chatId: number, telegramUserId: number) {
+  const state = await loadMiniState(sql, telegramUserId);
+  if (!state?.cabinets?.length) {
+    await telegram('sendMessage', { chat_id: chatId, text: 'Аптечек пока нет. Добавьте первую в мини-приложении — здесь сразу появятся её остатки.', reply_markup: appButton() });
+    return;
+  }
+  const lines = state.cabinets.map((cabinet: { id: string; name: string }) => {
+    const count = state.medications.filter((medication) => medication.cabinetId === cabinet.id).length;
+    return `• ${cabinet.name} — ${count} ${count === 1 ? 'препарат' : count < 5 ? 'препарата' : 'препаратов'}`;
+  });
+  await telegram('sendMessage', { chat_id: chatId, text: `Ваши аптечки\n\n${lines.join('\n')}\n\nВыберите аптечку, чтобы посмотреть остатки.`, reply_markup: { inline_keyboard: [state.cabinets.map((cabinet: { id: string; name: string }) => ({ text: cabinet.name.slice(0, 48), callback_data: `cabinet:${cabinet.id}` })), ...(appButton()?.inline_keyboard ?? [])] } });
+}
+
+async function sendCabinetContents(sql: ReturnType<typeof postgres>, chatId: number, telegramUserId: number, cabinetId: string) {
+  const state = await loadMiniState(sql, telegramUserId);
+  const cabinet = state?.cabinets?.find((item: { id: string }) => item.id === cabinetId);
+  if (!state || !cabinet) { await telegram('sendMessage', { chat_id: chatId, text: 'Аптечка не найдена. Обновите список.', reply_markup: botMenu() }); return; }
+  const medications = state.medications.filter((item) => item.cabinetId === cabinet.id);
+  const lines = medications.map((medication) => `• ${medication.name} — ${currentStock(state, medication.id)}`);
+  const body = lines.length ? lines.join('\n') : 'В этой аптечке пока нет препаратов.';
+  await telegram('sendMessage', { chat_id: chatId, text: `Аптечка «${cabinet.name}»\n\n${body}`.slice(0, 3900), reply_markup: botMenu() });
+}
+
 async function sendWelcome(chatId: number) {
   await telegram('sendMessage', {
     chat_id: chatId,
     text: 'Добро пожаловать в LifeCare!\n\nЯ буду бережно напоминать о запланированных приёмах. В сообщении можно сразу отметить «Принять» или отложить напоминание — запас и история обновятся в приложении.\n\nНастройте препараты и график в мини-приложении. Отключить уведомления можно командой /stop.',
-    reply_markup: appButton(),
+    reply_markup: botMenu(),
   });
 }
 
@@ -89,6 +127,7 @@ async function handleMessage(sql: ReturnType<typeof postgres>, message: Telegram
     const rows = await sql<{ active: boolean }[]>`select active from mobile_auth.telegram_notification_subscriptions where telegram_user_id = ${message.from.id} and chat_id = ${message.chat.id}`;
     await telegram('sendMessage', { chat_id: message.chat.id, text: rows[0]?.active ? 'Напоминания включены. Чтобы остановить их, отправьте /stop.' : 'Напоминания выключены. Чтобы включить их, отправьте /start.', reply_markup: appButton() });
   }
+  if (command === '/cabinets') await sendCabinets(sql, message.chat.id, message.from.id);
 }
 
 async function completeDose(sql: ReturnType<typeof postgres>, telegramUserId: number, doseId: string, status: 'taken' | 'skipped') {
@@ -171,6 +210,17 @@ async function completeMiniAppDose(sql: ReturnType<typeof postgres>, telegramUse
 }
 
 async function handleCallback(sql: ReturnType<typeof postgres>, callback: NonNullable<TelegramUpdate['callback_query']>) {
+  if (callback.data === 'cabinets' && callback.message) {
+    await telegram('answerCallbackQuery', { callback_query_id: callback.id });
+    await sendCabinets(sql, callback.message.chat.id, callback.from.id);
+    return;
+  }
+  const cabinetMatch = /^cabinet:([A-Za-z0-9_-]{1,160})$/.exec(callback.data ?? '');
+  if (cabinetMatch && callback.message) {
+    await telegram('answerCallbackQuery', { callback_query_id: callback.id });
+    await sendCabinetContents(sql, callback.message.chat.id, callback.from.id, cabinetMatch[1]);
+    return;
+  }
   const match = /^(taken|skipped|defer):(.{1,160})$/.exec(callback.data ?? '');
   if (!match) return;
   const [, action, doseId] = match;
