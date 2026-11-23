@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { emptyData, makeId, type AddMedicationInput, type Cabinet, type CreateScheduleInput, type DoseRecord, type DoseStatus, type LifeCareData, type Medication, type MedicationPackage, type MedicationSchedule } from '../domain/models';
+import { emptyData, makeId, normalizeLifeCareData, type AddMedicationInput, type Cabinet, type CreateScheduleInput, type DoseRecord, type DoseStatus, type LifeCareData, type Medication, type MedicationPackage, type MedicationSchedule } from '../domain/models';
 import { loadData, saveData } from '../domain/storage';
 import { telegramSync, telegramSyncAvailable } from '../telegram-sync';
 
@@ -31,7 +31,7 @@ export function LifeCareProvider({ children }: { children: ReactNode }) {
     if (!isReady || !telegramSyncAvailable()) { setRemoteReady(true); return; }
     let cancelled = false;
     void telegramSync.load().then((result) => {
-      if (!cancelled && result.has_data && result.state) setData(result.state);
+      if (!cancelled && result.has_data && result.state) setData(normalizeLifeCareData(result.state));
     }).catch(() => undefined).finally(() => { if (!cancelled) setRemoteReady(true); });
     return () => { cancelled = true; };
   }, [isReady]);
