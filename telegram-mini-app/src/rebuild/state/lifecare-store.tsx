@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { emptyData, makeId, normalizeLifeCareData, type AddMedicationInput, type Cabinet, type CreateScheduleInput, type DoseRecord, type DoseStatus, type LifeCareData, type Medication, type MedicationPackage, type MedicationSchedule } from '../domain/models';
+import { emptyData, makeId, normalizeLifeCareData, preferRicherLifeCareData, type AddMedicationInput, type Cabinet, type CreateScheduleInput, type DoseRecord, type DoseStatus, type LifeCareData, type Medication, type MedicationPackage, type MedicationSchedule } from '../domain/models';
 import { loadData, saveData } from '../domain/storage';
 import { telegramSync, telegramSyncAvailable } from '../telegram-sync';
 
@@ -31,14 +31,18 @@ export function LifeCareProvider({ children }: { children: ReactNode }) {
     if (!isReady || !telegramSyncAvailable()) { setRemoteReady(true); return; }
     let cancelled = false;
     void telegramSync.load().then((result) => {
-      if (!cancelled && result.has_data && result.state) setData(normalizeLifeCareData(result.state));
+      if (!cancelled && result.has_data && result.state) {
+        const remote = normalizeLifeCareData(result.state);
+        setData((current) => preferRicherLifeCareData(current, remote));
+      }
     }).catch(() => undefined).finally(() => { if (!cancelled) setRemoteReady(true); });
     return () => { cancelled = true; };
   }, [isReady]);
   useEffect(() => {
     if (!isReady || !remoteReady || !telegramSyncAvailable()) return;
-    const timer = window.setTimeout(() => { void telegramSync.save(data).catch(() => undefined); }, 800);
-    return () => window.clearTimeout(timer);
+    // Persist every confirmed UI action immediately. A user can close a Mini
+    // App straight after pressing "Save", so a delayed write loses real work.
+    void telegramSync.save(data).catch(() => undefined);
   }, [data, isReady, remoteReady]);
 
   const store = useMemo<Store>(() => ({

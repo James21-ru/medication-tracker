@@ -1,4 +1,4 @@
-import { emptyData, normalizeLifeCareData, type LifeCareData } from './models';
+import { emptyData, normalizeLifeCareData, preferRicherLifeCareData, type LifeCareData } from './models';
 
 const databaseName = 'lifecare-mini-app';
 const storeName = 'state';
@@ -49,19 +49,22 @@ function migrate(value: unknown): LifeCareData | null {
 }
 
 export async function loadData(): Promise<LifeCareData> {
+  let fallback = emptyData();
+  try {
+    const raw = localStorage.getItem(fallbackKey);
+    fallback = migrate(raw ? JSON.parse(raw) : null) ?? emptyData();
+  } catch { /* Safari/Telegram may temporarily deny Web Storage. */ }
   try {
     const saved = await fromIndexedDb();
-    return migrate(saved) ?? emptyData();
+    return preferRicherLifeCareData(fallback, migrate(saved) ?? emptyData());
   } catch {
-    try {
-      const raw = localStorage.getItem(fallbackKey);
-      const saved: unknown = raw ? JSON.parse(raw) : null;
-      return migrate(saved) ?? emptyData();
-    } catch { return emptyData(); }
+    return fallback;
   }
 }
 
 export async function saveData(data: LifeCareData) {
-  try { await toIndexedDb(data); }
-  catch { localStorage.setItem(fallbackKey, JSON.stringify(data)); }
+  // Keep a second local copy even when IndexedDB is healthy. Telegram iOS may
+  // clear one storage partition while retaining the other between launches.
+  try { localStorage.setItem(fallbackKey, JSON.stringify(data)); } catch { /* ignored */ }
+  try { await toIndexedDb(data); } catch { /* the fallback above is enough */ }
 }
