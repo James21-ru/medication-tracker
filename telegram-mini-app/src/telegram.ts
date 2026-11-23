@@ -1,5 +1,6 @@
 export type TelegramWebApp = {
   initData: string;
+  version?: string;
   ready: () => void;
   expand: () => void;
   requestFullscreen?: () => void;
@@ -35,9 +36,17 @@ export function prepareTelegramApp() {
   // Use the native fullscreen API where the Telegram client supports it. Older
   // clients retain the expanded Mini App behavior instead of failing to open.
   const expand = () => app.expand();
+  const versionAtLeast = (required: string) => {
+    const current = (app.version ?? '0.0').split('.').map(Number);
+    const target = required.split('.').map(Number);
+    return current[0] > target[0] || (current[0] === target[0] && (current[1] ?? 0) >= (target[1] ?? 0));
+  };
   let fullscreenRequested = false;
   const requestFullscreen = () => {
-    if (app.requestFullscreen && !app.isFullscreen && !fullscreenRequested) {
+    // Older Telegram clients expose this method but throw instead of reporting
+    // it unsupported. Fullscreen is available only in modern clients; all
+    // other versions use the stable expanded Mini App mode.
+    if (versionAtLeast('8.0') && app.requestFullscreen && !app.isFullscreen && !fullscreenRequested) {
       fullscreenRequested = true;
       try { app.requestFullscreen(); }
       catch { expand(); }
