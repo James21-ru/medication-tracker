@@ -1,0 +1,16 @@
+name: Run Telegram chatbot reminders
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check due doses
+        run: |
+          curl --fail --silent --show-error --request POST \
+            https://xviqgqflawfewqiaabne.supabase.co/functions/v1/telegram-chatbot/cron \
+            --header "x-lifecare-cron-secret: ${{ secrets.CHATBOT_CRON_SECRET }}"

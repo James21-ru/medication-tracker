@@ -50,8 +50,8 @@ async function telegram(method: string, body: Record<string, unknown>) {
   const response = await fetch(`https://api.telegram.org/bot${requiredEnv('TELEGRAM_BOT_TOKEN')}/${method}`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
   });
-  const result = await response.json() as { ok?: boolean; result?: { message_id?: number } };
-  if (!response.ok || !result.ok) throw new Error(`telegram ${method} failed`);
+  const result = await response.json() as { ok?: boolean; result?: { message_id?: number }; description?: string };
+  if (!response.ok || !result.ok) throw new Error(`telegram ${method} failed: ${result.description ?? response.status}`);
   return result.result;
 }
 
@@ -212,13 +212,17 @@ async function runScheduler(sql: ReturnType<typeof postgres>) {
   const due: DueDose[] = [];
   for (const subscription of subscriptions) {
     const now = new Intl.DateTimeFormat('en-GB', { timeZone: subscription.time_zone, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
+    const [nowHour, nowMinute] = now.split(':').map(Number);
+    const nowMinutes = nowHour * 60 + nowMinute;
     const date = dateInZone(subscription.time_zone);
     for (const schedule of subscription.payload.schedules.filter((item) => occursOn(item, date))) {
       const medication = subscription.payload.medications.find((item) => item.id === schedule.medicationId);
       if (!medication) continue;
       for (const time of schedule.times) {
         const doseId = `${schedule.id}:${time.id}:${date}`;
-        if (time.time !== now || subscription.payload.doseRecords.some((record) => record.slotId === doseId)) continue;
+        const [hour, minute] = time.time.split(':').map(Number);
+        const elapsedMinutes = (nowMinutes - (hour * 60 + minute) + 1_440) % 1_440;
+        if (elapsedMinutes > 4 || subscription.payload.doseRecords.some((record) => record.slotId === doseId)) continue;
         due.push({ telegram_user_id: subscription.telegram_user_id, chat_id: subscription.chat_id, dose_id: doseId, medication_id: medication.id, medication_name: medication.name, scheduled_time: time.time, quantity: time.quantity, unit: time.unit, form: medication.form, amount: medication.packageDose ?? '' });
       }
     }
@@ -248,6 +252,15 @@ Deno.serve(async (request) => {
   try {
     const route = new URL(request.url).pathname.split('/').at(-1);
     if (request.method === 'GET' && route === 'health') return json({ ok: true });
+    if (route === 'setup') {
+      if (!equals(request.headers.get('x-lifecare-cron-secret'), requiredEnv('CHATBOT_CRON_SECRET'))) return json({ error: 'unauthorized' }, 401);
+      const publicUrl = (Deno.env.get('SUPABASE_URL') ?? new URL(request.url).origin).replace(/\/$/, '');
+      const webhookUrl = `${publicUrl}/functions/v1/telegram-chatbot/webhook`;
+      try {
+        await telegram('setWebhook', { url: webhookUrl, secret_token: requiredEnv('TELEGRAM_WEBHOOK_SECRET'), allowed_updates: ['message', 'callback_query'] });
+        return json({ ok: true, webhook_url: webhookUrl });
+      } catch (error) { return json({ error: error instanceof Error ? error.message : 'setup_failed' }, 502); }
+    }
     sql = sqlClient();
     if (route === 'cron') {
       if (!equals(request.headers.get('x-lifecare-cron-secret'), requiredEnv('CHATBOT_CRON_SECRET'))) return json({ error: 'unauthorized' }, 401);
