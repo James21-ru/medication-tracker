@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { emptyData, makeId, type AddMedicationInput, type Cabinet, type CreateScheduleInput, type DoseRecord, type DoseStatus, type LifeCareData, type Medication, type MedicationPackage, type MedicationSchedule } from '../domain/models';
 import { loadData, saveData } from '../domain/storage';
+import { telegramSync, telegramSyncAvailable } from '../telegram-sync';
 
 type Store = {
   data: LifeCareData;
@@ -22,9 +23,23 @@ const normalized = (value: string) => value.trim().replace(/\s+/g, ' ').toLocale
 export function LifeCareProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<LifeCareData>(emptyData);
   const [isReady, setReady] = useState(false);
+  const [remoteReady, setRemoteReady] = useState(false);
 
   useEffect(() => { void loadData().then((next) => { setData(next); setReady(true); }); }, []);
   useEffect(() => { if (isReady) void saveData(data); }, [data, isReady]);
+  useEffect(() => {
+    if (!isReady || !telegramSyncAvailable()) { setRemoteReady(true); return; }
+    let cancelled = false;
+    void telegramSync.load().then((result) => {
+      if (!cancelled && result.has_data && result.state) setData(result.state);
+    }).catch(() => undefined).finally(() => { if (!cancelled) setRemoteReady(true); });
+    return () => { cancelled = true; };
+  }, [isReady]);
+  useEffect(() => {
+    if (!isReady || !remoteReady || !telegramSyncAvailable()) return;
+    const timer = window.setTimeout(() => { void telegramSync.save(data).catch(() => undefined); }, 800);
+    return () => window.clearTimeout(timer);
+  }, [data, isReady, remoteReady]);
 
   const store = useMemo<Store>(() => ({
     data,

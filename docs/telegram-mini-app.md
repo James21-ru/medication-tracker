@@ -59,17 +59,17 @@ The workflow publishes the Mini App at `https://james21-ru.github.io/medication-
 
 ## Chat-bot reminders
 
-`telegram-chatbot` is a separate server-side Edge Function. It implements the approved notification flow without making medical recommendations:
+`telegram-chatbot` is a separate server-side Edge Function. The Mini App safely mirrors its local state to the server only when opened inside Telegram; this gives the bot the current schedule without exposing a bot token to the browser. It implements the approved notification flow without making medical recommendations:
 
 - `/start` subscribes the private Telegram chat and shows an **Открыть приложение** button;
-- at the planned time the bot sends the medication name, quantity and the two clear actions **Принял** / **Пропустить**;
-- **Принял** deducts stock using the same transaction rules as the Mini App; **Пропустить** records a skipped dose;
+- at the planned time the bot sends the medication name, quantity and the two clear actions **Принять** / **Отложить**;
+- **Принять** deducts stock and records the dose in the Mini App mirror; **Отложить** keeps it pending and the bot sends one follow-up after 20 minutes;
 - if the dose remains pending, the bot sends one follow-up after 20 minutes;
 - `/stop` immediately disables all bot messages, and `/notifications` reports the current state.
 
 The bot only becomes active after a person starts it. A schedule never creates a Telegram conversation or sends a message to an unconsenting user.
 
-Apply the migrations, set server-only secrets and deploy the function:
+Apply the migrations (including `202611230001_telegram_mini_app_state.sql`), set server-only secrets and deploy both functions:
 
 ```sh
 supabase db push
@@ -78,6 +78,7 @@ supabase secrets set \
   TELEGRAM_WEBHOOK_SECRET='long-random-webhook-secret' \
   CHATBOT_CRON_SECRET='long-random-cron-secret' \
   MINI_APP_URL='https://james21-ru.github.io/medication-tracker/'
+supabase functions deploy telegram-mini-session --no-verify-jwt
 supabase functions deploy telegram-chatbot --no-verify-jwt
 ```
 

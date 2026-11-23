@@ -22,6 +22,8 @@ type DueDose = {
   form: string;
   amount: string;
 };
+type MiniState = { version: 2; medications: Array<{ id: string; name: string; form: string; packageDose?: string | null }>; packages: Array<{ medicationId: string; quantity: number; unit: string; expiresOn: string | null }>; schedules: Array<{ id: string; medicationId: string; frequency: string; startOn: string; endOn: string | null; weekdays: number[]; intervalDays: number | null; activeDays: number | null; restDays: number | null; active: boolean; times: Array<{ id: string; time: string; quantity: number; unit: string }> }>; doseRecords: Array<{ slotId: string; status: 'taken' | 'skipped'; medicationId: string; date: string; time: string; quantity: number; unit: string; completedAt: string }> };
+type SubscriptionState = { telegram_user_id: number; chat_id: number; time_zone: string; payload: MiniState };
 
 function requiredEnv(name: string) {
   const value = Deno.env.get(name);
@@ -61,7 +63,7 @@ const appButton = () => {
 async function sendWelcome(chatId: number) {
   await telegram('sendMessage', {
     chat_id: chatId,
-    text: 'Напоминания включены. Я напишу в назначенное время и помогу отметить приём.\n\nЧтобы отключить сообщения, отправьте /stop.',
+    text: 'Добро пожаловать в LifeCare!\n\nЯ буду бережно напоминать о запланированных приёмах. В сообщении можно сразу отметить «Принять» или отложить напоминание — запас и история обновятся в приложении.\n\nНастройте препараты и график в мини-приложении. Отключить уведомления можно командой /stop.',
     reply_markup: appButton(),
   });
 }
@@ -90,6 +92,8 @@ async function handleMessage(sql: ReturnType<typeof postgres>, message: Telegram
 }
 
 async function completeDose(sql: ReturnType<typeof postgres>, telegramUserId: number, doseId: string, status: 'taken' | 'skipped') {
+  const saved = await completeMiniAppDose(sql, telegramUserId, doseId, status);
+  if (saved) return saved;
   const account = await sql<{ user_id: string }[]>`select user_id from mobile_auth.telegram_accounts where telegram_user_id = ${telegramUserId}`;
   const ownerId = account[0]?.user_id;
   if (!ownerId) return { ok: false, message: 'Сначала откройте мини-приложение, чтобы связать чат с аптечкой.' };
@@ -123,10 +127,57 @@ async function completeDose(sql: ReturnType<typeof postgres>, telegramUserId: nu
   });
 }
 
+function dateInZone(timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
+function occursOn(schedule: MiniState['schedules'][number], date: string) {
+  if (!schedule.active || schedule.frequency === 'as-needed' || date < schedule.startOn || (schedule.endOn && date > schedule.endOn)) return false;
+  if (schedule.frequency === 'daily') return true;
+  const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+  if (schedule.frequency === 'weekdays') return schedule.weekdays.includes(weekday);
+  const days = Math.floor((new Date(`${date}T12:00:00Z`).getTime() - new Date(`${schedule.startOn}T12:00:00Z`).getTime()) / 86_400_000);
+  if (schedule.frequency === 'interval') return days >= 0 && days % Math.max(2, schedule.intervalDays ?? 2) === 0;
+  const active = Math.max(1, schedule.activeDays ?? 1);
+  const rest = Math.max(1, schedule.restDays ?? 1);
+  return days >= 0 && days % (active + rest) < active;
+}
+
+async function completeMiniAppDose(sql: ReturnType<typeof postgres>, telegramUserId: number, doseId: string, status: 'taken' | 'skipped') {
+  return await sql.begin(async (transaction) => {
+    const rows = await transaction<{ payload: MiniState }[]>`select payload from mobile_auth.telegram_mini_app_states where telegram_user_id = ${telegramUserId} for update`;
+    const state = rows[0]?.payload;
+    if (!state) return null;
+    const match = /^(.+):([^:]+):(\d{4}-\d{2}-\d{2})$/.exec(doseId);
+    const schedule = match ? state.schedules.find((item) => item.id === match[1]) : undefined;
+    const time = schedule?.times.find((item) => item.id === match?.[2]);
+    if (!schedule || !time || !match) return { ok: false, message: 'Этот приём уже недоступен.' };
+    const existing = state.doseRecords.find((item) => item.slotId === doseId);
+    if (existing) return { ok: true, message: existing.status === 'taken' ? 'Этот приём уже отмечен как принятый.' : 'Этот приём уже отмечен как пропущенный.' };
+    if (status === 'taken') {
+      const today = match[3];
+      const packages = state.packages.filter((item) => item.medicationId === schedule.medicationId && item.unit === time.unit && item.quantity > 0 && (!item.expiresOn || item.expiresOn >= today));
+      const available = packages.reduce((sum, item) => sum + Number(item.quantity), 0);
+      if (available < Number(time.quantity)) return { ok: false, message: `Недостаточно препарата в аптечке: доступно ${available} ${time.unit}.` };
+      let remaining = Number(time.quantity);
+      for (const pack of packages.sort((left, right) => (left.expiresOn ?? '9999-12-31').localeCompare(right.expiresOn ?? '9999-12-31'))) { const used = Math.min(remaining, Number(pack.quantity)); pack.quantity -= used; remaining -= used; }
+    }
+    state.doseRecords.push({ slotId: doseId, status, medicationId: schedule.medicationId, date: match[3], time: time.time, quantity: time.quantity, unit: time.unit, completedAt: new Date().toISOString() });
+    await transaction`update mobile_auth.telegram_mini_app_states set payload = ${JSON.stringify(state)}::jsonb, revision = revision + 1, updated_at = now() where telegram_user_id = ${telegramUserId}`;
+    return { ok: true, message: status === 'taken' ? 'Приём отмечен как принятый.' : 'Приём отмечен как пропущенный.' };
+  });
+}
+
 async function handleCallback(sql: ReturnType<typeof postgres>, callback: NonNullable<TelegramUpdate['callback_query']>) {
-  const match = /^(taken|skipped):([A-Za-z0-9_-]{1,160})$/.exec(callback.data ?? '');
+  const match = /^(taken|skipped|defer):(.{1,160})$/.exec(callback.data ?? '');
   if (!match) return;
   const [, action, doseId] = match;
+  if (action === 'defer') {
+    await telegram('answerCallbackQuery', { callback_query_id: callback.id, text: 'Хорошо, напомню ещё раз через 20 минут.' });
+    return;
+  }
   const result = await completeDose(sql, callback.from.id, doseId, action === 'taken' ? 'taken' : 'skipped');
   await telegram('answerCallbackQuery', { callback_query_id: callback.id, text: result.message, show_alert: !result.ok });
   if (callback.message) await telegram('editMessageReplyMarkup', { chat_id: callback.message.chat.id, message_id: callback.message.message_id, reply_markup: { inline_keyboard: [] } }).catch(() => undefined);
@@ -140,8 +191,8 @@ async function deliverDose(sql: ReturnType<typeof postgres>, dose: DueDose, kind
     chat_id: dose.chat_id,
     text,
     reply_markup: { inline_keyboard: [[
-      { text: 'Принял', callback_data: `taken:${dose.dose_id}` },
-      { text: 'Пропустить', callback_data: `skipped:${dose.dose_id}` },
+      { text: 'Принять', callback_data: `taken:${dose.dose_id}` },
+      { text: 'Отложить', callback_data: `defer:${dose.dose_id}` },
     ], ...(appButton()?.inline_keyboard ?? [])] },
   });
   await sql`
@@ -151,30 +202,43 @@ async function deliverDose(sql: ReturnType<typeof postgres>, dose: DueDose, kind
 }
 
 async function runScheduler(sql: ReturnType<typeof postgres>) {
-  // A two-minute window tolerates small cron delays; the unique delivery key
-  // ensures that the same dose is never sent twice.
-  const due = await sql<DueDose[]>`
-    select s.telegram_user_id, s.chat_id, d.id as dose_id, d.medication_id, m.name as medication_name,
-      d.scheduled_time::text, d.quantity, d.unit, m.form, m.amount
+  // A two-minute window tolerates cron delays; delivery keys make each
+  // notification idempotent even if more than one scheduler invocation runs.
+  const subscriptions = await sql<SubscriptionState[]>`
+    select s.telegram_user_id, s.chat_id, s.time_zone, state.payload
     from mobile_auth.telegram_notification_subscriptions s
-    join mobile_auth.telegram_accounts a on a.telegram_user_id = s.telegram_user_id
-    join public.dose_events d on d.owner_id = a.user_id and d.status = 'pending' and d.deleted_at is null
-    join public.medications m on m.id = d.medication_id and m.owner_id = d.owner_id and m.deleted_at is null
-    left join mobile_auth.telegram_notification_deliveries sent on sent.telegram_user_id = s.telegram_user_id and sent.dose_event_id = d.id and sent.kind = 'dose'
-    where s.active and s.dose_reminders and sent.id is null
-      and d.scheduled_on = (now() at time zone s.time_zone)::date
-      and d.scheduled_time between ((now() at time zone s.time_zone)::time - interval '1 minute') and ((now() at time zone s.time_zone)::time + interval '1 minute')`;
+    join mobile_auth.telegram_mini_app_states state on state.telegram_user_id = s.telegram_user_id
+    where s.active and s.dose_reminders`;
+  const due: DueDose[] = [];
+  for (const subscription of subscriptions) {
+    const now = new Intl.DateTimeFormat('en-GB', { timeZone: subscription.time_zone, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
+    const date = dateInZone(subscription.time_zone);
+    for (const schedule of subscription.payload.schedules.filter((item) => occursOn(item, date))) {
+      const medication = subscription.payload.medications.find((item) => item.id === schedule.medicationId);
+      if (!medication) continue;
+      for (const time of schedule.times) {
+        const doseId = `${schedule.id}:${time.id}:${date}`;
+        if (time.time !== now || subscription.payload.doseRecords.some((record) => record.slotId === doseId)) continue;
+        due.push({ telegram_user_id: subscription.telegram_user_id, chat_id: subscription.chat_id, dose_id: doseId, medication_id: medication.id, medication_name: medication.name, scheduled_time: time.time, quantity: time.quantity, unit: time.unit, form: medication.form, amount: medication.packageDose ?? '' });
+      }
+    }
+  }
   for (const dose of due) await deliverDose(sql, dose, 'dose');
-  const repeats = await sql<DueDose[]>`
-    select s.telegram_user_id, s.chat_id, d.id as dose_id, d.medication_id, m.name as medication_name,
-      d.scheduled_time::text, d.quantity, d.unit, m.form, m.amount
+  const repeatCandidates = await sql<Array<SubscriptionState & { dose_id: string }>>`
+    select s.telegram_user_id, s.chat_id, s.time_zone, state.payload, main.dose_event_id as dose_id
     from mobile_auth.telegram_notification_subscriptions s
-    join mobile_auth.telegram_accounts a on a.telegram_user_id = s.telegram_user_id
-    join public.dose_events d on d.owner_id = a.user_id and d.status = 'pending' and d.deleted_at is null
-    join public.medications m on m.id = d.medication_id and m.owner_id = d.owner_id and m.deleted_at is null
-    join mobile_auth.telegram_notification_deliveries main on main.telegram_user_id = s.telegram_user_id and main.dose_event_id = d.id and main.kind = 'dose' and main.created_at <= now() - interval '20 minutes'
-    left join mobile_auth.telegram_notification_deliveries repeated on repeated.telegram_user_id = s.telegram_user_id and repeated.dose_event_id = d.id and repeated.kind = 'repeat'
+    join mobile_auth.telegram_mini_app_states state on state.telegram_user_id = s.telegram_user_id
+    join mobile_auth.telegram_notification_deliveries main on main.telegram_user_id = s.telegram_user_id and main.kind = 'dose' and main.created_at <= now() - interval '20 minutes'
+    left join mobile_auth.telegram_notification_deliveries repeated on repeated.telegram_user_id = s.telegram_user_id and repeated.dose_event_id = main.dose_event_id and repeated.kind = 'repeat'
     where s.active and s.repeated_reminders and repeated.id is null`;
+  const repeats: DueDose[] = repeatCandidates.flatMap((candidate) => {
+    if (candidate.payload.doseRecords.some((record) => record.slotId === candidate.dose_id)) return [];
+    const match = /^(.+):([^:]+):(\d{4}-\d{2}-\d{2})$/.exec(candidate.dose_id);
+    const schedule = match ? candidate.payload.schedules.find((item) => item.id === match[1]) : undefined;
+    const time = schedule?.times.find((item) => item.id === match?.[2]);
+    const medication = schedule ? candidate.payload.medications.find((item) => item.id === schedule.medicationId) : undefined;
+    return schedule && time && medication ? [{ telegram_user_id: candidate.telegram_user_id, chat_id: candidate.chat_id, dose_id: candidate.dose_id, medication_id: medication.id, medication_name: medication.name, scheduled_time: time.time, quantity: time.quantity, unit: time.unit, form: medication.form, amount: medication.packageDose ?? '' }] : [];
+  });
   for (const dose of repeats) await deliverDose(sql, dose, 'repeat');
   return { delivered: due.length, repeated: repeats.length };
 }

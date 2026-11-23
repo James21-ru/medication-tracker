@@ -9,6 +9,15 @@ type Mutation =
   | { type: 'rename_cabinet'; cabinet_id: string; name: string }
   | { type: 'complete_dose'; dose_id: string; status: 'taken' | 'skipped' };
 
+type RebuildState = {
+  version: 2;
+  cabinets: unknown[];
+  medications: unknown[];
+  packages: unknown[];
+  schedules: unknown[];
+  doseRecords: unknown[];
+};
+
 const encoder = new TextEncoder();
 const corsHeaders = {
   'access-control-allow-origin': '*',
@@ -157,6 +166,23 @@ function parseMutation(value: unknown): Mutation {
   throw new Error('invalid mutation');
 }
 
+function parseRebuildState(value: unknown): RebuildState {
+  if (!value || typeof value !== 'object') throw new Error('invalid state');
+  const state = value as Partial<RebuildState>;
+  if (state.version !== 2 || !Array.isArray(state.cabinets) || !Array.isArray(state.medications) || !Array.isArray(state.packages) || !Array.isArray(state.schedules) || !Array.isArray(state.doseRecords)) throw new Error('invalid state');
+  if (state.cabinets.length > 100 || state.medications.length > 1000 || state.packages.length > 3000 || state.schedules.length > 1000 || state.doseRecords.length > 20_000) throw new Error('state is too large');
+  return state as RebuildState;
+}
+
+async function saveRebuildState(sql: ReturnType<typeof postgres>, telegramUserId: number, state: RebuildState, timeZone: unknown) {
+  const zone = typeof timeZone === 'string' && timeZone.length <= 64 ? timeZone : 'Europe/Moscow';
+  await sql`
+    insert into mobile_auth.telegram_mini_app_states (telegram_user_id, payload, time_zone)
+    values (${telegramUserId}, ${JSON.stringify(state)}::jsonb, ${zone})
+    on conflict (telegram_user_id) do update
+      set payload = excluded.payload, time_zone = excluded.time_zone, revision = mobile_auth.telegram_mini_app_states.revision + 1, updated_at = now()`;
+}
+
 async function runMutation(sql: ReturnType<typeof postgres>, ownerId: string, mutation: Mutation) {
   if (mutation.type === 'create_cabinet') {
     await sql`insert into public.cabinets (id, owner_id, name, created_at) values (${mutation.cabinet_id}, ${ownerId}, ${mutation.name}, now()) on conflict (id) do nothing`;
@@ -244,6 +270,15 @@ Deno.serve(async (request) => {
       // The account is created during first sign-in; this keeps everyday taps
       // to a single account lookup plus the requested database transaction.
       const ownerId = await telegramAccountId(sql, user.id) ?? (await ensureTelegramAccount(supabase, sql, user)).userId;
+      const rawMutation = body.mutation as Record<string, unknown>;
+      if (rawMutation.type === 'get_rebuild_state') {
+        const states = await sql<{ payload: RebuildState }[]>`select payload from mobile_auth.telegram_mini_app_states where telegram_user_id = ${user.id}`;
+        return new Response(JSON.stringify({ status: 'synced', has_data: Boolean(states[0]), state: states[0]?.payload }), { headers: corsHeaders });
+      }
+      if (rawMutation.type === 'sync_rebuild_state') {
+        await saveRebuildState(sql, user.id, parseRebuildState(rawMutation.state), rawMutation.time_zone);
+        return new Response(JSON.stringify({ status: 'synced' }), { headers: corsHeaders });
+      }
       const result = await runMutation(sql, ownerId, parseMutation(body.mutation));
       return new Response(JSON.stringify(result), { headers: corsHeaders });
     }
