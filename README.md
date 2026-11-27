@@ -10,12 +10,12 @@ The detailed product decisions live in [`docs/`](docs/).
 
 ## Architecture
 
-- `mobile/` — Expo + React Native + TypeScript. The native client remains offline-first with SQLite.
-- `telegram-mini-app/` — React 19 + TypeScript + Vite. It remains local-first and can synchronise a complete account-owned snapshot when opened from Telegram and a hosted API is configured.
-- `backend/` — FastAPI + SQLAlchemy + Alembic API for local PostgreSQL development and the optional Telegram cloud-sync endpoint.
-- `supabase/` — legacy functions/migrations, retained until the Telegram bot server flow is migrated and verified.
+- `mobile/`: Expo + React Native + TypeScript, локальное хранение в SQLite.
+- `telegram-mini-app/`: React + TypeScript + Vite. Действующий интерфейс находится в `src/rebuild/`, хранит локальную копию и ожидающие изменения отдельно для каждого аккаунта Telegram.
+- `supabase/`: действующие функции `telegram-mini-session` и `telegram-chatbot`. Общая копия аптечки хранится в `mobile_auth.telegram_mini_app_states` с проверкой версии при записи.
+- `backend/`: прежний FastAPI и отдельный путь `/sync/state`. Действующий интерфейс `src/rebuild/` его не использует.
 
-The regular cabinet CRUD endpoints remain local-development infrastructure. Cloud sync uses a separate endpoint that verifies Telegram Mini App `initData` server-side and stores a complete state snapshot under that Telegram account only. The bot token must exist only as the API host's `TELEGRAM_BOT_TOKEN` secret.
+Функция `telegram-mini-session` проверяет подписанные данные Telegram. Клиент получает состояние и `revision`, а при записи передает `expected_revision`. Сервер атомарно отклоняет устаревшие записи с кодом 409. Независимые изменения объединяются, пересекающиеся требуют решения пользователя. Токен бота и доступ к базе остаются только на сервере.
 
 ## Local PostgreSQL and API
 
@@ -30,20 +30,25 @@ PostgreSQL starts on `localhost:5433`; FastAPI starts on `http://localhost:8000`
 - Health: `http://localhost:8000/api/v1/health`
 - API docs: `http://localhost:8000/docs`
 
-The first schema covers аптечки, препараты, упаковки, расписания и события приёмов. The initial API exposes cabinet creation/renaming, medication CRUD and package creation.
+The first schema covers аптечки, препараты, упаковки, расписания и события приемов. The initial API exposes cabinet creation/renaming, medication CRUD and package creation.
 
-### Test the Telegram Mini App against the local API
+### Локальная проверка мини-приложения
 
-Keep `docker compose up --build` running. In a second terminal window run:
+Для интерфейса без Telegram и сетевой синхронизации отдельный API не нужен:
 
 ```bash
 cd telegram-mini-app
+npm ci
+npm test
+npm run build
 npm run dev
 ```
 
-Open the local Vite address that it prints (normally `http://localhost:5173`) in a desktop browser. `telegram-mini-app/.env.local` configures this local browser build to use `http://localhost:8000/api/v1`; it is intentionally ignored by Git and must never be used for a deployed Telegram Mini App.
+В новой локальной копии не задавайте `VITE_SUPABASE_URL` и не переносите рабочие `.env`. Обычный браузер сохраняет данные локально. Клиентские тесты моделируют два независимых устройства и сервер с проверкой версии, без подключений к Telegram или Supabase.
 
-For a hosted Mini App, set `VITE_API_BASE_URL` at build time to the public API URL ending in `/api/v1`. The API host also needs `DATABASE_URL`, `CORS_ORIGINS` set to the Mini App's HTTPS origin, and the `TELEGRAM_BOT_TOKEN` secret. When launched from Telegram, the client syncs cabinets, medications, packages, schedules and dose statuses as one protected snapshot. A direct browser launch intentionally stays local-only because it cannot prove which Telegram account owns the data.
+Для серверных проверок создайте отдельный локальный PostgreSQL с пустой базой `lifecare_sync_test`. Из корня установите зависимости командой `npm ci`, затем запустите `npm run test:sync-server`, задав `TEST_DATABASE_URL` для этой базы на `127.0.0.1`. Без переменной интеграционные тесты пропускаются. Тесты допускают только локальный адрес и точное имя тестовой базы.
+
+Для синхронизации внутри Telegram нужен `VITE_SUPABASE_URL` согласованного проекта и обновленная функция `telegram-mini-session`. Изменения протокола клиента и сервера должны выпускаться согласованно. Подробности: [docs/telegram-mini-app.md](docs/telegram-mini-app.md).
 
 ## Technology
 

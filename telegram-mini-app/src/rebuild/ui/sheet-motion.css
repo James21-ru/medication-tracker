@@ -1,0 +1,77 @@
+.lc-sheet-presence { display: contents; }
+
+.lc-sheet-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 18, 23, .36);
+  pointer-events: none;
+}
+
+.lc-sheet { position: relative; }
+.lc-sheet-presence[data-leaving] .lc-sheet-backdrop { pointer-events: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .lc-sheet {
+    transform-origin: center top;
+    transition: transform 440ms cubic-bezier(.22, .68, .2, 1);
+  }
+
+  .lc-sheet-scrim {
+    opacity: 1;
+    transition: opacity 320ms cubic-bezier(.25, .65, .25, 1);
+  }
+
+  /* При вложенном окне видимая часть нижней карточки чуть отступает. */
+  .lc-sheet-backdrop[aria-hidden="true"] > .lc-sheet { transform: scale(.985); }
+
+  .lc-sheet-presence[data-entering] > .lc-sheet-backdrop > .lc-sheet,
+  .lc-sheet-presence[data-leaving] .lc-sheet {
+    transform: translateY(calc(100% + 2px));
+  }
+
+  .lc-sheet-presence[data-entering] > .lc-sheet-backdrop > .lc-sheet-scrim,
+  .lc-sheet-presence[data-leaving] .lc-sheet-scrim { opacity: 0; }
+
+  /* При замене одной формы другой панель уже находится на экране. */
+  .lc-sheet-presence[data-entering][data-replacing] > .lc-sheet-backdrop > .lc-sheet {
+    transform: translateY(20px);
+    opacity: .88;
+  }
+  .lc-sheet-presence[data-replacing] > .lc-sheet-backdrop > .lc-sheet {
+    transition-property: transform, opacity;
+    transition-duration: 300ms, 200ms;
+  }
+
+  .lc-sheet-presence[data-leaving] .lc-sheet {
+    transition: transform 320ms cubic-bezier(.35, .08, .45, 1);
+  }
+  .lc-sheet-presence[data-leaving] .lc-sheet-scrim {
+    transition: opacity 285ms cubic-bezier(.36, .05, .5, 1);
+  }
+
+  .lc-sheet-presence[data-entering] > .lc-sheet-backdrop > .lc-sheet,
+  .lc-sheet-presence[data-entering] > .lc-sheet-backdrop > .lc-sheet-scrim {
+    transition: none;
+  }
+}
+
+.lc-save-notice {
+  position: fixed;
+  z-index: 20;
+  top: calc(8px + var(--lc-safe-top, env(safe-area-inset-top, 0px)));
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.lc-save-notice > span {
+  padding: 9px 16px;
+  max-width: 100%;
+  border-radius: 18px;
+  background: #195b45;
+  color: white;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}

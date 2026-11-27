@@ -1,98 +1,64 @@
-# LifeCare Telegram Mini App
+# LifeCare: синхронизация мини-приложения
 
-`telegram-mini-app/` is a separate web client for the two core LifeCare areas:
+Точка входа `telegram-mini-app/src/main.tsx` запускает `src/rebuild/app.tsx`. Прежний `src/app.tsx`, FastAPI `/sync/state` и параметр `VITE_API_BASE_URL` не участвуют в этом интерфейсе.
 
-- **Приёмы** — today's planned events and one-tap taken/skipped updates;
-- **Аптечка** — cloud-backed packages with current stock and the nearest expiry date;
-- **Таблетница** — a deep link (`lifecare://`) to the native LifeCare app.
+## Данные и пользователь
 
-It deliberately reads and writes the same Supabase tables as the planned mobile sync. It does not copy the local SQLite database. Until the React Native sync client is enabled, data created solely on a device remains local and will not appear in the Mini App.
+Клиент хранит локальную копию, базовую серверную версию и ожидающие изменения. Ключ хранилища включает адрес сервера и Telegram ID. Сервер проверяет подпись `init_data` и использует проверенный ID пользователя.
 
-## Secure Telegram session
+Общая копия находится в `mobile_auth.telegram_mini_app_states`: `telegram_user_id`, `payload`, `revision`, `time_zone`. Это аптечки, препараты, упаковки, расписания и отметки приема. Мобильная SQLite-база автоматически сюда не переносится.
 
-The Mini App sends `Telegram.WebApp.initData` to the `telegram-mini-session` Edge Function. The function validates Telegram's HMAC signature and a 24-hour `auth_date`, finds or creates the same Supabase user as the native Telegram OIDC flow, then returns a one-time Supabase token hash. The browser exchanges that hash using `verifyOtp`; no bot token or service key reaches the browser.
+## Протокол
 
-Set the Edge Function secrets (never in `.env` for the Mini App). The function needs a server-only database connection to create a medication, its package, schedule and dose events atomically:
+Запросы идут в `${VITE_SUPABASE_URL}/functions/v1/telegram-mini-session`.
 
-```sh
-supabase secrets set \
-  TELEGRAM_BOT_TOKEN='replace-with-a-rotated-bot-token' \
-  LIFECARE_DB_URL='postgresql://<server-only-connection-string>' \
-  LIFECARE_SERVICE_ROLE_KEY='<service-role-key>'
-supabase functions deploy telegram-mini-session --no-verify-jwt
-```
+- `get_rebuild_state` возвращает `has_data`, `state` и `revision`. Если записи нет, версия равна 0.
+- `sync_rebuild_state` принимает `state`, обязательную `expected_revision` и `time_zone`.
+- Для версии 0 выполняется вставка без замены существующей строки. Для остальных версий обновление проверяет пользователя и версию одним SQL-запросом.
+- Успех возвращает новую версию, конфликт HTTP 409. Неверные параметры дают 400, неподтвержденный вход 401, ошибка сервера 500.
 
-The existing bot token was previously pasted into a chat, so rotate it in **@BotFather** before setting this secret.
-Use a server-side Database connection string and the service-role key from the Supabase dashboard. `SUPABASE_URL` is provided to Edge Functions by Supabase itself. Do not put the database URL, bot token or service-role key into GitHub Actions, the Mini App environment or source control. `VITE_SUPABASE_PUBLISHABLE_KEY` is the only Supabase key that belongs in the browser build.
+Новое устройство не отправляет пустую аптечку при открытии. Перед отправкой ожидающих изменений клиент читает сервер. Записи выполняются последовательно, локальные изменения сохраняются до сетевого запроса.
 
-## Local development
+При конфликте клиент сравнивает базовую, локальную и серверную копии. Независимые изменения объединяются по идентификаторам и полям. Пересекающиеся изменения, удаление одновременно с редактированием и несовместимые списания остатков не принимаются автоматически. Выбор по количеству записей не используется.
+
+Возврат в приложение и восстановление сети запускают повторную синхронизацию. Пользователь видит состояние отправки, ошибку или конфликт. Сохраненная локальная копия доступна без сети.
+
+## Совместимость
+
+Прежний драйвер PostgreSQL повторно сериализовал строку `JSON.stringify(state)` при параметре типа `jsonb`. Новый код передает JSON как `text` с последующим преобразованием в `jsonb`. Чтение распознает старую строковую копию без изменения строки базы. При следующем согласованном сохранении записывается объект.
+
+Старым отметкам бота без `id` при чтении присваивается устойчивый идентификатор по `slotId`. Новые отметки сразу содержат его. Бот сохраняет блокировку строки и увеличение `revision`, поэтому устаревший клиент не может затереть его действие.
+
+Прежние локальные копии без привязки к аккаунту не удаляются и не отправляются автоматически от имени вошедшего пользователя. Их перенос требует явного выбора. Очистка текущего устройства не удаляет общую серверную аптечку.
+
+## Изолированные проверки
+
+Клиентские тесты не требуют токенов, Telegram, Supabase или базы:
 
 ```sh
 cd telegram-mini-app
-cp .env.example .env.local
-npm install
-npm run dev
-```
-
-Telegram requires an HTTPS URL. Use an approved HTTPS preview host for a real in-Telegram test, set it as the bot's Menu Button / Web App URL in @BotFather, then deploy the static `dist/` folder there:
-
-```sh
+npm ci
+npm test
 npm run build
 ```
 
-## Deployment prerequisites
-
-1. Apply the existing cloud-sync and mobile-auth migrations to the LifeCare Supabase project.
-2. Set `TELEGRAM_BOT_TOKEN` and deploy `telegram-mini-session`.
-3. Configure `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in the static host.
-4. Publish the Mini App over HTTPS and set that URL for the LifeCare bot's Menu Button.
-5. Implement the mobile SQLite outbox/pull sync before presenting the Mini App as a shared cross-device view.
-
-## GitHub Pages
-
-The repository includes `.github/workflows/deploy-telegram-mini-app.yml`. In the GitHub repository open **Settings → Pages** and set **Source** to **GitHub Actions**. Then open **Settings → Secrets and variables → Actions** and add these repository secrets from the existing `mobile/.env` file:
-
-- `VITE_SUPABASE_URL` — the value of `EXPO_PUBLIC_SUPABASE_URL`;
-- `VITE_SUPABASE_PUBLISHABLE_KEY` — the value of `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
-
-The workflow publishes the Mini App at `https://james21-ru.github.io/medication-tracker/`. Set that HTTPS address as the LifeCare bot's Menu Button / Web App URL in @BotFather after the first successful deployment.
-
-## Chat-bot reminders
-
-`telegram-chatbot` is a separate server-side Edge Function. The Mini App safely mirrors its local state to the server only when opened inside Telegram; this gives the bot the current schedule without exposing a bot token to the browser. It implements the approved notification flow without making medical recommendations:
-
-- `/start` subscribes the private Telegram chat and shows an **Открыть приложение** button;
-- at the planned time the bot sends the medication name, quantity and the two clear actions **Принять** / **Отложить**;
-- **Принять** deducts stock and records the dose in the Mini App mirror; **Отложить** keeps it pending and the bot sends one follow-up after 20 minutes;
-- if the dose remains pending, the bot sends one follow-up after 20 minutes;
-- `/stop` immediately disables all bot messages, and `/notifications` reports the current state.
-
-The bot only becomes active after a person starts it. A schedule never creates a Telegram conversation or sends a message to an unconsenting user.
-
-Apply the migrations (including `202611230001_telegram_mini_app_state.sql`), set server-only secrets and deploy both functions:
+Для SQL-проверок создайте отдельный локальный PostgreSQL с пустой базой `lifecare_sync_test`. Из корня репозитория:
 
 ```sh
-supabase db push
-supabase secrets set \
-  TELEGRAM_BOT_TOKEN='token-from-botfather' \
-  TELEGRAM_WEBHOOK_SECRET='long-random-webhook-secret' \
-  CHATBOT_CRON_SECRET='long-random-cron-secret' \
-  MINI_APP_URL='https://james21-ru.github.io/medication-tracker/'
-supabase functions deploy telegram-mini-session --no-verify-jwt
-supabase functions deploy telegram-chatbot --no-verify-jwt
+npm ci
+TEST_DATABASE_URL='postgresql://sync_test@127.0.0.1:55432/lifecare_sync_test' npm run test:sync-server
 ```
 
-Then set Telegram's webhook from a secure machine; replace the placeholders locally and never commit the token or secrets:
+Порт должен принадлежать созданному тестовому экземпляру. Тесты допускают только локальный адрес и указанное имя базы, используют выделенные идентификаторы и удаляют только свои строки. Без `TEST_DATABASE_URL` проверки с PostgreSQL пропускаются. Нужен Node.js 22.18 или новее с поддержкой запуска TypeScript.
 
-```sh
-curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
-  -d "url=https://<project-ref>.supabase.co/functions/v1/telegram-chatbot/webhook" \
-  -d "secret_token=$TELEGRAM_WEBHOOK_SECRET" \
-  -d 'allowed_updates=["message","callback_query"]'
-```
+Проверяются: чистое второе устройство, одновременные записи, объединение независимых изменений, очередь после закрытия без сети, удаления, конфликты остатков, потерянный ответ записи, старый строковый JSON, действие бота и разделение аккаунтов.
 
-Finally, call `POST /functions/v1/telegram-chatbot/cron` once per minute with header `x-lifecare-cron-secret: <CHATBOT_CRON_SECRET>`. Use Supabase Cron, a server scheduler, or another server-owned job. The scheduler must not run in the Mini App or on a user's phone.
+## Настройки и выпуск
 
-### Supabase Storage alternative
+Перед выпуском откройте тестовый бот на телефоне и ноутбуке под одним аккаунтом. В форме новой аптечки введите длинное название, сверните и снова откройте клавиатуру. Поле и нижняя кнопка должны оставаться доступными. Сохраните аптечку и откройте ее на втором устройстве.
 
-If GitHub Pages is unavailable for the repository, create a public bucket named `lifecare-mini`. Build with `MINI_APP_BASE=/storage/v1/object/public/lifecare-mini/` and upload `dist/` into that bucket. The Mini App URL is then `https://<project-ref>.supabase.co/storage/v1/object/public/lifecare-mini/index.html`.
+В карточке препарата откройте настройку приема и закройте ее до сохранения. На экране должна остаться карточка. Затем сохраните график с двумя временами, проверьте подтверждение и откройте раздел «Приемы». С включенным в системе уменьшением движения окна и шаги должны меняться без анимации.
+
+В браузерной сборке нужен `VITE_SUPABASE_URL` согласованного проекта. Без него браузер работает локально. Токен бота, строка базы и служебный ключ остаются только на сервере. В функции `verify_jwt=false` используется вместе с обязательной проверкой подписи Telegram.
+
+Старый клиент не передает `expected_revision`, поэтому обновленный сервер отклоняет его запись. Выпуск клиента и серверных функций нужно согласовать; старое открытое приложение потребуется переоткрыть. Публикация, миграции, изменение настроек и действия с рабочим ботом требуют отдельного согласия пользователя.

@@ -1,5 +1,14 @@
-import { createClient } from 'npm:@supabase/supabase-js@2.117.0';
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.117.0';
 import postgres from 'npm:postgres@3.4.9';
+import {
+  loadRebuildState,
+  parseExpectedRevision,
+  parseRebuildState,
+  RequestError,
+  requestErrorResponse,
+  saveRebuildState,
+  type Query,
+} from './state-sync.ts';
 
 type TelegramUser = { id: number; first_name?: string; last_name?: string; username?: string; photo_url?: string };
 type Mutation =
@@ -8,15 +17,6 @@ type Mutation =
   | { type: 'create_cabinet'; cabinet_id: string; name: string }
   | { type: 'rename_cabinet'; cabinet_id: string; name: string }
   | { type: 'complete_dose'; dose_id: string; status: 'taken' | 'skipped' };
-
-type RebuildState = {
-  version: 2;
-  cabinets: unknown[];
-  medications: unknown[];
-  packages: unknown[];
-  schedules: unknown[];
-  doseRecords: unknown[];
-};
 
 const encoder = new TextEncoder();
 const corsHeaders = {
@@ -41,7 +41,7 @@ function serviceKey(): string {
 }
 
 async function hmac(key: Uint8Array | string, value: string) {
-  const rawKey = typeof key === 'string' ? encoder.encode(key) : key;
+  const rawKey = typeof key === 'string' ? encoder.encode(key) : new Uint8Array(key);
   const cryptoKey = await crypto.subtle.importKey('raw', rawKey, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   return new Uint8Array(await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(value)));
 }
@@ -67,7 +67,7 @@ async function verifyInitData(initData: string, botToken: string) {
   return user;
 }
 
-async function ensureTelegramAccount(client: ReturnType<typeof createClient>, sql: ReturnType<typeof postgres>, user: TelegramUser) {
+async function ensureTelegramAccount(client: SupabaseClient, sql: ReturnType<typeof postgres>, user: TelegramUser) {
   const email = `telegram-${user.id}@telegram.lifecare.invalid`;
   const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || null;
   const metadata = { full_name: name, telegram_id: user.id, telegram_username: user.username ?? null, avatar_url: user.photo_url ?? null };
@@ -102,7 +102,7 @@ async function telegramAccountId(sql: ReturnType<typeof postgres>, telegramUserI
   return accounts[0]?.user_id ?? null;
 }
 
-async function issueLoginToken(client: ReturnType<typeof createClient>, sql: ReturnType<typeof postgres>, user: TelegramUser) {
+async function issueLoginToken(client: SupabaseClient, sql: ReturnType<typeof postgres>, user: TelegramUser) {
   const account = await ensureTelegramAccount(client, sql, user);
   const { data, error } = await client.auth.admin.generateLink({ type: 'magiclink', email: account.email });
   const tokenHash = data?.properties?.hashed_token;
@@ -164,23 +164,6 @@ function parseMutation(value: unknown): Mutation {
   if (input.type === 'create_cabinet' || input.type === 'rename_cabinet') return { type: input.type, cabinet_id: identifier(input.cabinet_id, 'cabinet_id'), name: nonEmpty(input.name, 'name').slice(0, 60) };
   if (input.type === 'complete_dose' && (input.status === 'taken' || input.status === 'skipped')) return { type: 'complete_dose', dose_id: identifier(input.dose_id, 'dose_id'), status: input.status };
   throw new Error('invalid mutation');
-}
-
-function parseRebuildState(value: unknown): RebuildState {
-  if (!value || typeof value !== 'object') throw new Error('invalid state');
-  const state = value as Partial<RebuildState>;
-  if (state.version !== 2 || !Array.isArray(state.cabinets) || !Array.isArray(state.medications) || !Array.isArray(state.packages) || !Array.isArray(state.schedules) || !Array.isArray(state.doseRecords)) throw new Error('invalid state');
-  if (state.cabinets.length > 100 || state.medications.length > 1000 || state.packages.length > 3000 || state.schedules.length > 1000 || state.doseRecords.length > 20_000) throw new Error('state is too large');
-  return state as RebuildState;
-}
-
-async function saveRebuildState(sql: ReturnType<typeof postgres>, telegramUserId: number, state: RebuildState, timeZone: unknown) {
-  const zone = typeof timeZone === 'string' && timeZone.length <= 64 ? timeZone : 'Europe/Moscow';
-  await sql`
-    insert into mobile_auth.telegram_mini_app_states (telegram_user_id, payload, time_zone)
-    values (${telegramUserId}, ${JSON.stringify(state)}::jsonb, ${zone})
-    on conflict (telegram_user_id) do update
-      set payload = excluded.payload, time_zone = excluded.time_zone, revision = mobile_auth.telegram_mini_app_states.revision + 1, updated_at = now()`;
 }
 
 async function runMutation(sql: ReturnType<typeof postgres>, ownerId: string, mutation: Mutation) {
@@ -260,34 +243,54 @@ Deno.serve(async (request) => {
   if (request.method !== 'POST') return new Response(JSON.stringify({ error: 'method_not_allowed' }), { status: 405, headers: corsHeaders });
   let sql: ReturnType<typeof postgres> | null = null;
   try {
-    const body = await request.json() as { init_data?: unknown; mutation?: unknown };
-    if (typeof body.init_data !== 'string') throw new Error('missing init data');
-    const user = await verifyInitData(body.init_data, requiredEnv('TELEGRAM_BOT_TOKEN'));
+    let input: unknown;
+    try { input = await request.json(); } catch { throw new RequestError(400, 'invalid_json'); }
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new RequestError(400, 'invalid_request');
+    const body = input as { init_data?: unknown; mutation?: unknown };
+    if (typeof body.init_data !== 'string') throw new RequestError(401, 'authentication_failed');
+    const botToken = requiredEnv('TELEGRAM_BOT_TOKEN');
+    let user: TelegramUser;
+    try { user = await verifyInitData(body.init_data, botToken); } catch { throw new RequestError(401, 'authentication_failed'); }
+    let rawMutation: Record<string, unknown> | undefined;
+    let mutation: Mutation | undefined;
+    if ('mutation' in body) {
+      if (!body.mutation || typeof body.mutation !== 'object' || Array.isArray(body.mutation)) {
+        throw new RequestError(400, 'invalid_mutation');
+      }
+      rawMutation = body.mutation as Record<string, unknown>;
+      if (rawMutation.type === 'sync_rebuild_state') {
+        parseExpectedRevision(rawMutation.expected_revision);
+        parseRebuildState(rawMutation.state);
+      } else if (rawMutation.type !== 'get_rebuild_state') {
+        try { mutation = parseMutation(rawMutation); } catch { throw new RequestError(400, 'invalid_mutation'); }
+      }
+    }
     const supabase = createClient(requiredEnv('SUPABASE_URL'), serviceKey(), { auth: { autoRefreshToken: false, persistSession: false } });
     sql = postgres(Deno.env.get('LIFECARE_DB_URL') ?? requiredEnv('SUPABASE_DB_URL'), { prepare: false, max: 1, idle_timeout: 20 });
-    if (body.mutation) {
+    const connection = sql;
+    const query: Query = async (statement, parameters) => await connection.unsafe(statement, parameters);
+    if (rawMutation) {
       // Mutations do not need to update Auth metadata or mint a login link.
       // The account is created during first sign-in; this keeps everyday taps
       // to a single account lookup plus the requested database transaction.
       const ownerId = await telegramAccountId(sql, user.id) ?? (await ensureTelegramAccount(supabase, sql, user)).userId;
-      const rawMutation = body.mutation as Record<string, unknown>;
       if (rawMutation.type === 'get_rebuild_state') {
-        const states = await sql<{ payload: RebuildState }[]>`select payload from mobile_auth.telegram_mini_app_states where telegram_user_id = ${user.id}`;
-        return new Response(JSON.stringify({ status: 'synced', has_data: Boolean(states[0]), state: states[0]?.payload }), { headers: corsHeaders });
+        return new Response(JSON.stringify(await loadRebuildState(query, user.id)), { headers: corsHeaders });
       }
       if (rawMutation.type === 'sync_rebuild_state') {
-        await saveRebuildState(sql, user.id, parseRebuildState(rawMutation.state), rawMutation.time_zone);
-        return new Response(JSON.stringify({ status: 'synced' }), { headers: corsHeaders });
+        const result = await saveRebuildState(query, user.id, rawMutation.state, rawMutation.expected_revision, rawMutation.time_zone);
+        return new Response(JSON.stringify(result), { headers: corsHeaders });
       }
-      const result = await runMutation(sql, ownerId, parseMutation(body.mutation));
+      const result = await runMutation(sql, ownerId, mutation!);
       return new Response(JSON.stringify(result), { headers: corsHeaders });
     }
     const session = await issueLoginToken(supabase, sql, user);
     return new Response(JSON.stringify({ token_hash: session.tokenHash }), { headers: corsHeaders });
   } catch (error) {
-    console.error(`[telegram-mini-session] ${error instanceof Error ? error.message : String(error)}`);
-    return new Response(JSON.stringify({ error: 'authentication_failed' }), { status: 401, headers: corsHeaders });
+    const failure = requestErrorResponse(error);
+    if (failure.status === 500) console.error('[telegram-mini-session] request_failed');
+    return new Response(JSON.stringify(failure.body), { status: failure.status, headers: corsHeaders });
   } finally {
-    if (sql) await sql.end({ timeout: 1 });
+    if (sql) await sql.end({ timeout: 1 }).catch(() => undefined);
   }
 });
