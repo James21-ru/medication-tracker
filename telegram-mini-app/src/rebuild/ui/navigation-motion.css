@@ -1,0 +1,34 @@
+@media (prefers-reduced-motion: no-preference) {
+  .lc-tab-content {
+    animation: lc-tab-reveal 180ms ease-out;
+  }
+
+  /* Модалка сразу остается над навигацией, даже при быстром открытии. */
+  .lc-tab-content:has([role='dialog']) {
+    animation-duration: 0s;
+  }
+
+  .lc-tabbar button {
+    transition: background-color 160ms ease-out, color 160ms ease-out;
+  }
+
+  .lc-save-notice > .lc-save-notice__message {
+    animation: lc-save-notice-cycle 3200ms linear both;
+  }
+}
+
+@keyframes lc-tab-reveal {
+  from { opacity: .6; }
+  to { opacity: 1; }
+}
+
+@keyframes lc-save-notice-cycle {
+  0%, 100% { opacity: 0; }
+  5%, 95% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lc-tab-content,
+  .lc-save-notice > .lc-save-notice__message { animation: none; }
+  .lc-tabbar button { transition: none; }
+}

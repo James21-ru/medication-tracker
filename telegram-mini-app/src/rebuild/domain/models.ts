@@ -136,10 +136,3 @@ export function normalizeLifeCareData(value: unknown): LifeCareData {
   });
   return { version: 2, cabinets, medications, packages, schedules, doseRecords };
 }
-
-/** Prefer the record that actually contains user work. This protects a newly
- * created cabinet from an older empty mirror arriving a moment later. */
-export function preferRicherLifeCareData(left: LifeCareData, right: LifeCareData): LifeCareData {
-  const weight = (data: LifeCareData) => data.cabinets.length * 10_000 + data.medications.length * 1_000 + data.packages.length * 100 + data.schedules.length * 10 + data.doseRecords.length;
-  return weight(right) >= weight(left) ? right : left;
-}

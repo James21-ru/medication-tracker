@@ -1,0 +1,110 @@
+/* Длинные названия должны переноситься внутри карточек и списков. */
+.lc-section-heading { gap: 12px; }
+.lc-section-heading > div,
+.lc-cabinet-switcher > span:nth-child(2),
+.lc-medication-card > div,
+.lc-next-dose section,
+.lc-dose-card__main > div,
+.lc-cabinet-choices > button > span:first-child,
+.lc-dose-medication-choice .lc-choice-list button > span,
+.lc-adherence-card > div,
+.lc-account-hero > div,
+.lc-account-info > div,
+.lc-report-note > div,
+.lc-field { min-width: 0; }
+
+.lc-cabinet-switcher strong,
+.lc-medication-card h2,
+.lc-medication-card p,
+.lc-medication-card strong,
+.lc-next-dose section,
+.lc-dose-card__main h2,
+.lc-dose-card__main p,
+.lc-cabinet-choices strong,
+.lc-dose-medication-choice .lc-choice-list button > span,
+.lc-medication-detail,
+.lc-package-form,
+.lc-edit-medication,
+.lc-delete-medication,
+.lc-success,
+.lc-flow__cabinet,
+.lc-form-error,
+.lc-action-message,
+.lc-sync-details { overflow-wrap: anywhere; }
+
+.lc-round-add,
+.lc-cabinet-switcher__icon,
+.lc-cabinet-switcher > svg,
+.lc-cabinet-choices > button > svg,
+.lc-cabinet-choices .lc-radio,
+.lc-dose-medication-choice .lc-choice-list svg { flex-shrink: 0; }
+
+.lc-medication-card { grid-template-columns: 52px minmax(0, 1fr) 18px; }
+.lc-next-dose > div,
+.lc-dose-card__main { grid-template-columns: 46px minmax(0, 1fr); }
+.lc-cabinet-choices > button,
+.lc-dose-medication-choice .lc-choice-list button { gap: 12px; padding-top: 12px; padding-bottom: 12px; }
+.lc-dose-medication-choice .lc-choice-list button > span { flex: 1; }
+.lc-medication-detail section strong { min-width: 0; }
+.lc-package-list > div { flex-wrap: wrap; }
+.lc-package-list span { flex: 1 1 140px; min-width: 0; }
+.lc-package-list em { flex: 0 0 auto; }
+
+/* Поля и действия остаются доступны при переносе подписи на две строки. */
+.lc-split-fields,
+.lc-schedule-time-row,
+.lc-dose-actions,
+.lc-medication-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.lc-schedule-modes button { grid-template-columns: minmax(0, 1fr) 20px; }
+.lc-input-with-unit { min-width: 0; grid-template-columns: minmax(0, 1fr) auto; }
+.lc-input-with-unit span { max-width: 100px; overflow-wrap: anywhere; }
+.lc-flow-actions { grid-template-columns: minmax(0, .55fr) minmax(0, 1fr); }
+.lc-flow-actions > :only-child { grid-column: 1 / -1; }
+.lc-primary-button,
+.lc-secondary-button,
+.lc-danger-button,
+.lc-medication-actions button,
+.lc-dose-actions button,
+.lc-account-danger,
+.lc-export-button { min-width: 0; padding: 10px 12px; line-height: 1.3; overflow-wrap: anywhere; }
+.lc-primary-button svg,
+.lc-secondary-button svg { flex-shrink: 0; height: 20px; }
+
+/* Семь дней календаря не задают минимальную ширину всему экрану. */
+.lc-week,
+.lc-weekday-choice { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.lc-week button,
+.lc-weekday-choice button { min-width: 0; }
+.lc-week strong { width: 100%; max-width: 39px; height: auto; aspect-ratio: 1; }
+.lc-doses-summary { grid-template-columns: minmax(0, 1fr) auto; }
+.lc-day-progress { flex-shrink: 0; padding: 0 7px; }
+
+/* В отчете название препарата доступно целиком, без скрытого окончания. */
+.lc-medication-report strong { overflow: visible; white-space: normal; text-overflow: clip; overflow-wrap: anywhere; }
+.lc-report-stats,
+.lc-account-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.lc-report-stats article,
+.lc-account-list > div,
+.lc-bars > div { min-width: 0; }
+.lc-report-stats strong,
+.lc-report-stats small,
+.lc-account-list strong,
+.lc-account-list small { max-width: 100%; overflow-wrap: anywhere; text-align: center; }
+.lc-account-hero { grid-template-columns: 54px minmax(0, 1fr); }
+.lc-account-info { grid-template-columns: 42px minmax(0, 1fr); }
+.lc-report-note { grid-template-columns: 40px minmax(0, 1fr); }
+.lc-account-info + .lc-secondary-button { margin-top: 12px; }
+.lc-legacy-copies input[type='checkbox'] { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 3px; }
+.lc-legacy-copies article > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.lc-sync-status > div { min-width: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 359px) {
+  .lc-time-row,
+  .lc-schedule-time-row,
+  .lc-split-fields--balanced { grid-template-columns: minmax(0, 1fr); }
+  .lc-split-fields--balanced { gap: 0; }
+  .lc-dose-actions { grid-template-columns: minmax(0, 1fr); }
+  .lc-sync-status { flex-wrap: wrap; }
+  .lc-sync-status > div { flex: 1 1 160px; }
+  .lc-sync-status > button { margin-left: auto; }
+}

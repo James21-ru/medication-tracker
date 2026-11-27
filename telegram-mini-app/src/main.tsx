@@ -3,13 +3,14 @@ import { createRoot } from 'react-dom/client';
 
 import { RebuiltApp } from './rebuild/app';
 import './rebuild/rebuild.css';
+import './rebuild/layout.css';
 import { prepareTelegramApp } from './telegram';
 
 class StartupBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
   render() {
-    if (this.state.failed) return <main className="lc-loading"><p>Не удалось открыть LifeCare</p><button className="lc-primary-button" onClick={() => window.location.reload()}>Попробовать ещё раз</button></main>;
+    if (this.state.failed) return <main className="lc-loading"><p>Не удалось открыть LifeCare</p><button className="lc-primary-button" onClick={() => window.location.reload()}>Попробовать еще раз</button></main>;
     return this.props.children;
   }
 }

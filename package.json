@@ -1,6 +1,13 @@
 {
+  "type": "module",
+  "scripts": {
+    "test:sync-server": "node --test --test-concurrency=1 supabase/functions/tests/state-sync.test.ts supabase/functions/tests/sync-devices.test.ts"
+  },
   "dependencies": {
     "@neon/config": "^1.9.4",
     "@neon/env": "^1.6.5"
+  },
+  "devDependencies": {
+    "postgres": "3.4.9"
   }
 }
